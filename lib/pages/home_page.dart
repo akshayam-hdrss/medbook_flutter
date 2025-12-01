@@ -219,13 +219,23 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
       print("📍 District: $detectedDistrict | Area: $detectedArea");
 
-      setState(() {
-        selectedDistrict = detectedDistrict;
-        selectedArea = detectedArea;
-      });
+setState(() {
+  String normalized = detectedDistrict.trim();
 
-      await _secureStorageService.saveSelectedDistrict(detectedDistrict);
-      await _secureStorageService.saveSelectedArea(detectedArea);
+  // Match detected district with your dropdown names
+  selectedDistrict = tamilNaduData.keys.firstWhere(
+    (d) => normalized.toLowerCase().contains(d.toLowerCase()),
+    orElse: () => normalized,   // <-- FIX HERE
+  );
+
+  selectedArea = detectedArea;
+});
+
+// Save the cleaned district & area
+await _secureStorageService.saveSelectedDistrict(selectedDistrict ?? '');
+await _secureStorageService.saveSelectedArea(selectedArea ?? '');
+
+
     } catch (e, s) {
       print('❌ Location Error: $e');
       print(s);
