@@ -245,7 +245,6 @@ class _HospitalPage1State extends State<HospitalPage1>
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const AppLoadingWidget();
-                    // return const Center(child: CircularProgressIndicator());
                   } else if (snapshot.hasError || !snapshot.hasData) {
                     return const SizedBox();
                   }
@@ -270,7 +269,6 @@ class _HospitalPage1State extends State<HospitalPage1>
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const AppLoadingWidget();
-                  // return const Center(child: CircularProgressIndicator());
                 } else if (snapshot.hasError) {
                   return const Center(child: Text('Error loading data'));
                 } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
@@ -462,7 +460,6 @@ class _HospitalPage1State extends State<HospitalPage1>
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const AppLoadingWidget();
-                  // return const Center(child: CircularProgressIndicator());
                 } else if (snapshot.hasError || !snapshot.hasData) {
                   return const SizedBox();
                 }

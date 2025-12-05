@@ -120,7 +120,6 @@ class _DoctorsPage1State extends State<DoctorsPage1> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
            return const AppLoadingWidget();
-            // return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
             return const Center(child: Text("Error loading data"));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {

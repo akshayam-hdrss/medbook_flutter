@@ -314,7 +314,7 @@ class _Traditional1State extends State<Traditional1>
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const AppLoadingWidget();
-                  // return const Center(child: CircularProgressIndicator());
+                  
                 } else if (snapshot.hasError || !snapshot.hasData) {
                   return const SizedBox();
                 }

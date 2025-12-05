@@ -291,6 +291,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:medbook/Services/secure_storage_service.dart';
+import 'package:medbook/components/common/loading_widget.dart';
 import 'package:medbook/pages/home_page.dart';
 import 'package:medbook/pages/Starting_page.dart';
 import 'package:medbook/pages/auth/Signup.dart';
@@ -503,7 +504,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         child: Center(
                           child: _isLoading
-                              ? const CircularProgressIndicator()
+                              ? const AppLoadingWidget()
                               : const Text(
                                   "LOGIN",
                                   style: TextStyle(

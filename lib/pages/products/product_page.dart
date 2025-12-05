@@ -117,7 +117,7 @@
 //       ),
 //     ),
 //       body: isLoading
-//           ? const Center(child: CircularProgressIndicator())
+//           ? const Center(child: )
 //           : error != null
 //               ? Center(child: Text("Error: $error"))
 //               : productList.isEmpty

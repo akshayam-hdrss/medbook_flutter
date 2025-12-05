@@ -44,10 +44,11 @@ class _DoctorListPageState extends State<DoctorListPage> {
       final user = await storage.getUserDetails();
       final userId = user?['id'];
       final isDoctor = user?['isDoctor'] == 1;
-      
 
       final url = Uri.parse(
-        isDoctor ? "$doctorBaseUrl/doctor/$userId" : "$doctorBaseUrl/user/$userId",
+        isDoctor
+            ? "$doctorBaseUrl/doctor/$userId"
+            : "$doctorBaseUrl/user/$userId",
       );
 
       final response = await http.get(url);
@@ -55,8 +56,9 @@ class _DoctorListPageState extends State<DoctorListPage> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        List<Map<String, dynamic>> list =
-            data is List ? List<Map<String, dynamic>>.from(data) : [];
+        List<Map<String, dynamic>> list = data is List
+            ? List<Map<String, dynamic>>.from(data)
+            : [];
 
         final names = list
             .map((e) => e["doctorName"]?.toString() ?? "")
@@ -80,16 +82,19 @@ class _DoctorListPageState extends State<DoctorListPage> {
       final isService = user?['isService'] == 1;
 
       final url = Uri.parse(
-        isService ? "$serviceBaseUrl/service/$userId" : "$serviceBaseUrl/user/$userId",
-        );
+        isService
+            ? "$serviceBaseUrl/service/$userId"
+            : "$serviceBaseUrl/user/$userId",
+      );
 
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        List<Map<String, dynamic>> list =
-            data is List ? List<Map<String, dynamic>>.from(data) : [];
+        List<Map<String, dynamic>> list = data is List
+            ? List<Map<String, dynamic>>.from(data)
+            : [];
 
         final names = list
             .map((e) => e["serviceName"]?.toString() ?? "")
@@ -128,9 +133,7 @@ class _DoctorListPageState extends State<DoctorListPage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ServiceSchedulePage(
-              selectedService: service,
-            ),
+            builder: (_) => ServiceSchedulePage(selectedService: service),
           ),
         );
       },
@@ -172,7 +175,11 @@ class _DoctorListPageState extends State<DoctorListPage> {
               ),
             ),
           ),
-          const Icon(Icons.arrow_forward_ios, size: 18, color: Color(0xFF00796B)),
+          const Icon(
+            Icons.arrow_forward_ios,
+            size: 18,
+            color: Color(0xFF00796B),
+          ),
         ],
       ),
     );
@@ -186,16 +193,37 @@ class _DoctorListPageState extends State<DoctorListPage> {
         final contentWidth = isTablet ? 600.0 : double.infinity;
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF7FAFC),
-
-          appBar: AppBar(
-            title: const Text("Doctors & Services"),
-            centerTitle: true,
-            backgroundColor: Colors.redAccent,
+          backgroundColor: const Color(0xFFFFF8F2),
+          appBar: PreferredSize(
+            preferredSize: const Size.fromHeight(kToolbarHeight),
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color.fromARGB(255, 225, 119, 20),
+                    Color.fromARGB(255, 239, 48, 34),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: AppBar(
+                title: const Text(
+                  "Schedules",
+                  style: TextStyle(color: Colors.white),
+                ),
+                centerTitle: true,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                iconTheme: const IconThemeData(color: Colors.white),
+              ),
+            ),
           ),
 
           body: isLoading
-              ? const Center(child: CircularProgressIndicator(color: Colors.red))
+              ? const Center(
+                  child: CircularProgressIndicator(color: Colors.red),
+                )
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
                   child: Center(
@@ -206,9 +234,13 @@ class _DoctorListPageState extends State<DoctorListPage> {
                         children: [
                           // ---------------------- DOCTOR SECTION ---------------------
                           if (doctorNames.isNotEmpty) ...[
-                            const Text("Doctors",
-                                style: TextStyle(
-                                    fontSize: 20, fontWeight: FontWeight.bold)),
+                            const Text(
+                              "Doctors",
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                             const SizedBox(height: 12),
 
                             ...doctorNames.map(
@@ -219,9 +251,13 @@ class _DoctorListPageState extends State<DoctorListPage> {
 
                           // ---------------------- SERVICE SECTION --------------------
                           if (serviceNames.isNotEmpty) ...[
-                            const Text("Services",
-                                style: TextStyle(
-                                    fontSize: 20, fontWeight: FontWeight.bold)),
+                            const Text(
+                              "Services",
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                             const SizedBox(height: 12),
 
                             ...serviceNames.map(

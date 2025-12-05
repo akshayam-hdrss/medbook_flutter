@@ -289,44 +289,38 @@ class _FavouritesPageState extends State<FavouritesPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Favourites"),
-        centerTitle: true,
-        backgroundColor: Colors.redAccent,
-        actions: [
-          if (!loading && favouriteItems.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(right: 16.0),
-              child: Center(
-                // child: Text(
-                //   "${favouriteItems.length} items",
-                //   style: const TextStyle(
-                //     fontSize: 16,
-                //     fontWeight: FontWeight.w500,
-                //   ),
-                // ),
-              ),
+      backgroundColor: const Color(0xFFFFF8F2),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color.fromARGB(255, 225, 119, 20),
+                Color.fromARGB(255, 239, 48, 34),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-          // IconButton(
-          //   icon: const Icon(Icons.refresh),
-          //   onPressed: _refreshFavourites,
-          // ),
-        ],
+          ),
+          child: AppBar(
+            title: const Text(
+              "Favourites",
+              style: TextStyle(color: Colors.white),
+            ),
+            centerTitle: true,
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            iconTheme: const IconThemeData(color: Colors.white),
+          ),
+        ),
       ),
-      backgroundColor: const Color(0xFFF6F7FB),
 
       body: loading
           ? const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const AppLoadingWidget(),
-                  SizedBox(height: 16),
-                  Text(
-                    "Loading your favourites...",
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                ],
+                children: [const AppLoadingWidget(), SizedBox(height: 16)],
               ),
             )
           : _userId == null

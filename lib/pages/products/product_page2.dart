@@ -293,13 +293,6 @@ class _ProductPage2State extends State<ProductPage2> {
             centerTitle: true,
             iconTheme: const IconThemeData(color: Colors.white),
             foregroundColor: Colors.white,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.favorite),
-                onPressed: _refreshFavourites,
-                tooltip: "Refresh favourites",
-              ),
-            ],
           ),
         ),
       ),

@@ -106,8 +106,7 @@
 //   @override
 //   @override
 //   Widget build(BuildContext context) {
-//     if (isLoading) {
-//       return const Center(child: CircularProgressIndicator());
+//     
 //     }
 
 //     if (errorMessage.isNotEmpty) {

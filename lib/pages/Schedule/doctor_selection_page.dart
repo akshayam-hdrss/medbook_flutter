@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:medbook/components/common/loading_widget.dart';
 import 'package:medbook/pages/Schedule/DoctorSchedulePage.dart';
 // import 'doctor_schedule_page.dart';
 
@@ -68,7 +69,7 @@ class _DoctorSelectionPageState extends State<DoctorSelectionPage> {
         centerTitle: true,
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: AppLoadingWidget())
           : error != null
               ? Center(child: Text("Error: $error"))
               : ListView.builder(

@@ -88,7 +88,7 @@
 // ),
 
 //       body: _isLoading
-//           ? const Center(child: CircularProgressIndicator())
+//          
 //           : _offers.isEmpty
 //               ? const Center(child: Text("No offers available"))
 //               : ListView.builder(

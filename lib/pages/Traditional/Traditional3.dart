@@ -366,13 +366,7 @@ class _Traditional3State extends State<Traditional3> {
             backgroundColor: Colors.transparent,
             elevation: 0,
             iconTheme: const IconThemeData(color: Colors.white),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.favorite),
-                onPressed: _refreshFavourites,
-                tooltip: "Refresh favourites",
-              ),
-            ],
+           
           ),
         ),
       ),

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:medbook/components/common/loading_widget.dart';
 import 'package:medbook/services/secure_storage_service.dart';
 
 class ComplaintDialog extends StatefulWidget {
@@ -149,7 +150,7 @@ class _ComplaintDialogState extends State<ComplaintDialog> {
               decoration: const InputDecoration(labelText: 'Location'),
             ),
             const SizedBox(height: 10),
-            if (isUploading) const CircularProgressIndicator(),
+            if (isUploading) const AppLoadingWidget(),
             if (imagePreviews.isNotEmpty)
               Column(
                 children: List.generate(imagePreviews.length, (index) {

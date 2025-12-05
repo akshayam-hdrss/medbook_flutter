@@ -169,7 +169,7 @@ class _Traditional4State extends State<Traditional4> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const AppLoadingWidget();
-          // return const Center(child: CircularProgressIndicator());
+          
         }
         if (!snapshot.hasData || snapshot.hasError || snapshot.data!.isEmpty) {
           return const Center(child: Text("No doctor details found."));

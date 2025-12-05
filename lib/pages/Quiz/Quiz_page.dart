@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:medbook/components/Footer.dart';
+import 'package:medbook/components/common/loading_widget.dart';
 import 'package:medbook/services/secure_storage_service.dart';
 
 class QuizPage extends StatefulWidget {
@@ -223,7 +224,7 @@ class _QuizPageState extends State<QuizPage> {
       future: _quizData,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
+          return Center(child: AppLoadingWidget());
         }
 
         if (snapshot.hasError) {

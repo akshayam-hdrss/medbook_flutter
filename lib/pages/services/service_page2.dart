@@ -317,20 +317,13 @@ class _ServicesPage2State extends State<ServicesPage2> {
           ),
           child: AppBar(
             title: const Text(
-              "HealthCare",
+              "Services",
               style: TextStyle(color: Colors.white),
             ),
             centerTitle: true,
             backgroundColor: Colors.transparent,
             elevation: 0,
             iconTheme: const IconThemeData(color: Colors.white),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.favorite),
-                onPressed: _refreshFavourites,
-                tooltip: "Refresh favourites",
-              ),
-            ],
           ),
         ),
       ),

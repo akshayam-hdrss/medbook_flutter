@@ -162,7 +162,6 @@ class _DoctorsPage3State extends State<Doctors_Page3> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const AppLoadingWidget();
-            // return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError ||
               !snapshot.hasData ||
               snapshot.data!.isEmpty) {
@@ -421,7 +420,6 @@ class _DoctorsPage3State extends State<Doctors_Page3> {
                         if (reviewSnapshot.connectionState ==
                             ConnectionState.waiting) {
                               return const AppLoadingWidget();
-                          // return const Center(child: CircularProgressIndicator());
                         } else if (!reviewSnapshot.hasData ||
                             reviewSnapshot.data!.isEmpty) {
                           return const Center(child: Text("No reviews yet."));
@@ -540,7 +538,6 @@ class _DoctorsPage3State extends State<Doctors_Page3> {
                         if (reviewSnapshot.connectionState ==
                             ConnectionState.waiting) {
                               return const AppLoadingWidget();
-                          // return const Center(child: CircularProgressIndicator());
                         } else if (!reviewSnapshot.hasData ||
                             reviewSnapshot.data!.isEmpty) {
                           return const Center(child: Text("No reviews yet."));

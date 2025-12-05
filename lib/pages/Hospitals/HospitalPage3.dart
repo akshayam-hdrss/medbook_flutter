@@ -345,13 +345,7 @@ class _HospitalPage3State extends State<HospitalPage3> {
             backgroundColor: Colors.transparent,
             elevation: 0,
             centerTitle: true,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.favorite),
-                onPressed: _refreshFavourites,
-                tooltip: "Refresh favourites",
-              ),
-            ],
+            
           ),
         ),
       ),
@@ -544,7 +538,7 @@ class _HospitalPage3State extends State<HospitalPage3> {
                             if (adsSnapshot.connectionState ==
                                 ConnectionState.waiting) {
                               return const Center(
-                                child: CircularProgressIndicator(),
+                                child: AppLoadingWidget(),
                               );
                             } else if (adsSnapshot.hasError ||
                                 !adsSnapshot.hasData) {

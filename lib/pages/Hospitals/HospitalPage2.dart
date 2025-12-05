@@ -160,7 +160,7 @@ class _HospitalPage2State extends State<HospitalPage2> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const AppLoadingWidget();
-            // return const Center(child: CircularProgressIndicator());
+            
           } else if (snapshot.hasError) {
             return const Center(child: Text('Error loading hospitals'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
@@ -323,7 +323,7 @@ class _HospitalPage2State extends State<HospitalPage2> {
                               ConnectionState.waiting) {
                             return const SizedBox(
                               height: 220,
-                              child: Center(child: CircularProgressIndicator()),
+                              child: Center(child: AppLoadingWidget()),
                             );
                           } else if (adSnap.hasError ||
                               !adSnap.hasData ||

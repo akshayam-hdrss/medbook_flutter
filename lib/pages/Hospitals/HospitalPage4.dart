@@ -179,7 +179,7 @@ class _HospitalPage4State extends State<HospitalPage4> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const AppLoadingWidget();
           }
-          // return const Center(child: CircularProgressIndicator());
+
           if (!snapshot.hasData ||
               snapshot.hasError ||
               snapshot.data!.isEmpty) {
@@ -456,9 +456,7 @@ class _HospitalPage4State extends State<HospitalPage4> {
                       future: doctorReviews,
                       builder: (context, rsnap) {
                         if (rsnap.connectionState == ConnectionState.waiting) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
+                          return const Center(child: AppLoadingWidget());
                         }
                         final reviews = rsnap.data ?? [];
                         if (reviews.isEmpty) {
@@ -583,9 +581,7 @@ class _HospitalPage4State extends State<HospitalPage4> {
                       future: doctorReviews,
                       builder: (c, rsnap) {
                         if (rsnap.connectionState == ConnectionState.waiting) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
+                          return const Center(child: AppLoadingWidget());
                         }
 
                         final reviews = rsnap.data ?? [];

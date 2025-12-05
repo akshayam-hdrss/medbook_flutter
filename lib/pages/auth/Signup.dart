@@ -236,7 +236,7 @@
 //                         ),
 //                         child: Center(
 //                           child: _isLoading
-//                               ? const CircularProgressIndicator()
+//                             
 //                               : const Text(
 //                                   "SIGN UP",
 //                                   style: TextStyle(
@@ -386,6 +386,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:medbook/components/common/loading_widget.dart';
 import 'package:medbook/pages/Starting_page.dart';
 import 'package:medbook/pages/auth/Login.dart';
 
@@ -621,7 +622,7 @@ class _SignupPageState extends State<SignupPage> {
                         ),
                         child: Center(
                           child: _isLoading
-                              ? const CircularProgressIndicator()
+                              ? const AppLoadingWidget()
                               : const Text(
                                   "SIGN UP",
                                   style: TextStyle(
