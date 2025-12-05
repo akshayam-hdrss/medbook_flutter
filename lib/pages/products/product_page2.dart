@@ -4,6 +4,9 @@ import 'package:medbook/components/Footer.dart';
 import 'package:medbook/components/common/loading_widget.dart';
 import 'package:medbook/utils/api_service.dart';
 import 'package:medbook/pages/products/product_page3.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:medbook/Services/secure_storage_service.dart';
 
 class ProductPage2 extends StatefulWidget {
   final String productTypeId;
@@ -22,10 +25,15 @@ class _ProductPage2State extends State<ProductPage2> {
   String _selectedLocation = 'All Locations';
   List<String> locations = ['All Locations'];
 
+  // ⭐ Favourite system for PRODUCTS
+  Map<String, bool> favouriteStatus = {};
+  Map<String, int?> favouriteIds = {};
+  String? _userId;
+
   @override
   void initState() {
     super.initState();
-    fetchProductList();
+    _initializeData();
     _searchController.addListener(_filterProducts);
   }
 
@@ -33,6 +41,174 @@ class _ProductPage2State extends State<ProductPage2> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  // ⭐ Initialize all data
+  Future<void> _initializeData() async {
+    await _loadUserId();
+    await loadFavourites();
+    await fetchProductList();
+  }
+
+  // ⭐ Load user ID from secure storage
+  Future<void> _loadUserId() async {
+    final storage = SecureStorageService();
+    final user = await storage.getUserDetails();
+    _userId = user?["id"]?.toString();
+  }
+
+  // ⭐ Fetch favourite PRODUCTS - USING SPECIFIC USER ID ENDPOINT
+  Future<void> loadFavourites() async {
+    if (_userId == null) return;
+
+    try {
+      // ✅ CORRECT ENDPOINT: Use userfavorites/favorites/userId to get favorites for specific user
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/userfavorites/favorites/$_userId",
+      );
+      final res = await http.get(url);
+
+      if (res.statusCode != 200) {
+        print("Failed to load favorites: ${res.statusCode}");
+        return;
+      }
+
+      final List data = jsonDecode(res.body);
+
+      favouriteStatus.clear();
+      favouriteIds.clear();
+
+      for (var fav in data) {
+        // Check for PRODUCT favorites (not doctor or service)
+        final productId = fav["productId"]?.toString();
+        if (productId != null) {
+          favouriteStatus[productId] = true;
+          favouriteIds[productId] = fav["id"];
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print("Favourite load error: $e");
+    }
+  }
+
+  // ⭐ Add PRODUCT to favourite - USING CORRECT ENDPOINT
+  Future<void> addFavourite(String productId) async {
+    if (_userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please login to add favourites")),
+      );
+      return;
+    }
+
+    // Optimistic UI update
+    favouriteStatus[productId] = true;
+    if (mounted) setState(() {});
+
+    try {
+      // ✅ CORRECT ENDPOINT for adding PRODUCT favorites
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/userfavorites/favorites/",
+      );
+      final body = jsonEncode({"productId": productId, "userId": _userId});
+
+      final res = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: body,
+      );
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final saved = jsonDecode(res.body);
+        favouriteIds[productId] = saved["id"];
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Added to favourites"),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        // Revert on error
+        favouriteStatus[productId] = false;
+        if (mounted) setState(() {});
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Failed to add to favourites"),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      // Revert on error
+      favouriteStatus[productId] = false;
+      if (mounted) setState(() {});
+
+      print("Add favourite error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: ${e.toString()}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ⭐ Remove PRODUCT from favourite - USING CORRECT ENDPOINT
+  Future<void> removeFavourite(String productId) async {
+    final favId = favouriteIds[productId];
+    if (favId == null) return;
+
+    // Optimistic UI update
+    favouriteStatus[productId] = false;
+    if (mounted) setState(() {});
+
+    try {
+      // ✅ CORRECT ENDPOINT for removing PRODUCT favorites
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/userfavorites/favorites/$favId",
+      );
+
+      final res = await http.delete(url);
+
+      if (res.statusCode == 200) {
+        favouriteIds[productId] = null;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Removed from favourites"),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        // Revert on error
+        favouriteStatus[productId] = true;
+        if (mounted) setState(() {});
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Failed to remove from favourites"),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      // Revert on error
+      favouriteStatus[productId] = true;
+      if (mounted) setState(() {});
+
+      print("Remove favourite error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: ${e.toString()}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> fetchProductList() async {
@@ -84,6 +260,11 @@ class _ProductPage2State extends State<ProductPage2> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  // ⭐ Refresh favourites
+  Future<void> _refreshFavourites() async {
+    await loadFavourites();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -112,11 +293,18 @@ class _ProductPage2State extends State<ProductPage2> {
             centerTitle: true,
             iconTheme: const IconThemeData(color: Colors.white),
             foregroundColor: Colors.white,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.favorite),
+                onPressed: _refreshFavourites,
+                tooltip: "Refresh favourites",
+              ),
+            ],
           ),
         ),
       ),
       body: isLoading
-          ? const AppLoadingWidget() 
+          ? const AppLoadingWidget()
           : productList.isEmpty
           ? const Center(child: Text("No related products found."))
           : Column(
@@ -283,130 +471,191 @@ class _ProductPage2State extends State<ProductPage2> {
                             final price = product['price']?.toString() ?? 'N/A';
                             final phone = product['phone'] ?? '';
                             final productId = product['id'].toString();
+                            final isFav = favouriteStatus[productId] == true;
 
-                            return GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        ProductPage3(productId: productId),
-                                  ),
-                                );
-                              },
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 20),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 4),
+                            return Stack(
+                              children: [
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            ProductPage3(productId: productId),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 20),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image.network(
-                                        imageUrl.isNotEmpty ? imageUrl : "",
-                                        height: 140,
-                                        width: 120,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (context, error, stackTrace) {
-                                          return Image.asset(
-                                            'lib/Assets/images/product_page2/dummy.jpg',
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          child: Image.network(
+                                            imageUrl.isNotEmpty ? imageUrl : "",
                                             height: 140,
                                             width: 120,
                                             fit: BoxFit.cover,
-                                          );
-                                        },
-                                      ),
-                                    ),
+                                            errorBuilder:
+                                                (context, error, stackTrace) {
+                                                  return Image.asset(
+                                                    'lib/Assets/images/product_page2/dummy.jpg',
+                                                    height: 140,
+                                                    width: 120,
+                                                    fit: BoxFit.cover,
+                                                  );
+                                                },
+                                          ),
+                                        ),
 
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            productName,
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            businessName,
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            location,
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              color: Colors.grey,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            'Price: ₹$price',
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.deepOrange,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 10),
-                                          Row(
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
-                                              GestureDetector(
-                                                onTap: () => showMessage(
-                                                  "Calling $phone...",
-                                                ),
-                                                child: _actionIcon(
-                                                  FontAwesomeIcons.phone,
-                                                  Colors.lightBlueAccent,
+                                              Text(
+                                                productName,
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
                                                 ),
                                               ),
-                                              const SizedBox(width: 12),
-                                              GestureDetector(
-                                                onTap: () => showMessage(
-                                                  "Opening WhatsApp for $phone...",
-                                                ),
-                                                child: _actionIcon(
-                                                  FontAwesomeIcons.whatsapp,
-                                                  Colors.green,
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                businessName,
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w500,
                                                 ),
                                               ),
-                                              const SizedBox(width: 12),
-                                              GestureDetector(
-                                                onTap: () => showMessage(
-                                                  "Showing map for $location...",
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                location,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.grey,
                                                 ),
-                                                child: _actionIcon(
-                                                  FontAwesomeIcons.mapMarkerAlt,
-                                                  const Color(0xFFFF5722),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Text(
+                                                'Price: ₹$price',
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.deepOrange,
                                                 ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Row(
+                                                children: [
+                                                  GestureDetector(
+                                                    onTap: () => showMessage(
+                                                      "Calling $phone...",
+                                                    ),
+                                                    child: _actionIcon(
+                                                      FontAwesomeIcons.phone,
+                                                      Colors.lightBlueAccent,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  GestureDetector(
+                                                    onTap: () => showMessage(
+                                                      "Opening WhatsApp for $phone...",
+                                                    ),
+                                                    child: _actionIcon(
+                                                      FontAwesomeIcons.whatsapp,
+                                                      Colors.green,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  GestureDetector(
+                                                    onTap: () => showMessage(
+                                                      "Showing map for $location...",
+                                                    ),
+                                                    child: _actionIcon(
+                                                      FontAwesomeIcons
+                                                          .mapMarkerAlt,
+                                                      const Color(0xFFFF5722),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ],
                                           ),
-                                        ],
-                                      ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              ),
+
+                                // ❤️ Favourite button for PRODUCTS
+                                Positioned(
+                                  right: 10,
+                                  top: 10,
+                                  child: StatefulBuilder(
+                                    builder: (context, refresh) {
+                                      return GestureDetector(
+                                        onTap: () async {
+                                          if (isFav) {
+                                            await removeFavourite(productId);
+                                          } else {
+                                            await addFavourite(productId);
+                                          }
+                                          // Force UI refresh
+                                          if (mounted) {
+                                            refresh(() {});
+                                            setState(() {});
+                                          }
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(
+                                                  0.1,
+                                                ),
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Icon(
+                                            isFav
+                                                ? Icons.favorite
+                                                : Icons.favorite_border,
+                                            color: isFav
+                                                ? Colors.red
+                                                : Colors.grey,
+                                            size: 24,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
                             );
                           },
                         ),

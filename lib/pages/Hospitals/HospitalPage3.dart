@@ -1,6 +1,6 @@
-//search and filter functionality
-
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:medbook/components/Footer.dart';
 import 'package:medbook/components/common/loading_widget.dart';
 import 'package:medbook/components/videoCarousel.dart';
@@ -9,6 +9,7 @@ import 'package:medbook/utils/api_service.dart';
 import 'package:medbook/pages/Hospitals/HospitalPage4.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:medbook/Services/secure_storage_service.dart';
 
 class HospitalPage3 extends StatefulWidget {
   final String hospitalId;
@@ -33,9 +34,15 @@ class _HospitalPage3State extends State<HospitalPage3> {
   List<Map<String, String>> _filteredDoctors = [];
   Map<String, List<Map<String, String>>> _categorizedDoctors = {};
 
+  // ⭐ Favourite system
+  Map<String, bool> favouriteStatus = {};
+  Map<String, int?> favouriteIds = {};
+  String? _userId;
+
   @override
   void initState() {
     super.initState();
+    _initializeData();
     _dataFuture = fetchDoctorsByHospital(widget.hospitalId).then((data) {
       final categories = List<String>.from(data['categories'] ?? []);
       final doctors = List<Map<String, String>>.from(data['doctors'] ?? []);
@@ -48,6 +55,173 @@ class _HospitalPage3State extends State<HospitalPage3> {
       return data;
     });
     _adsFuture = fetchHospitalAds();
+  }
+
+  // ⭐ Initialize all data
+  Future<void> _initializeData() async {
+    await _loadUserId();
+    await loadFavourites();
+  }
+
+  // ⭐ Load user ID from secure storage
+  Future<void> _loadUserId() async {
+    final storage = SecureStorageService();
+    final user = await storage.getUserDetails();
+    _userId = user?["id"]?.toString();
+  }
+
+  // ⭐ Fetch favourite doctors - USING SPECIFIC USER ID ENDPOINT
+  Future<void> loadFavourites() async {
+    if (_userId == null) return;
+
+    try {
+      // ✅ CORRECT ENDPOINT: Use userfavorites/favorites/userId to get favorites for specific user
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/userfavorites/favorites/$_userId",
+      );
+      final res = await http.get(url);
+
+      if (res.statusCode != 200) {
+        print("Failed to load favorites: ${res.statusCode}");
+        return;
+      }
+
+      final List data = jsonDecode(res.body);
+
+      favouriteStatus.clear();
+      favouriteIds.clear();
+
+      for (var fav in data) {
+        // Since we're fetching for specific user, all favorites belong to this user
+        final doctorId = fav["doctorId"]?.toString();
+        if (doctorId != null) {
+          favouriteStatus[doctorId] = true;
+          favouriteIds[doctorId] = fav["id"];
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print("Favourite load error: $e");
+    }
+  }
+
+  // ⭐ Add favourite - USING CORRECT ENDPOINT
+  Future<void> addFavourite(String doctorId) async {
+    if (_userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please login to add favourites")),
+      );
+      return;
+    }
+
+    // Optimistic UI update
+    favouriteStatus[doctorId] = true;
+    if (mounted) setState(() {});
+
+    try {
+      // ✅ CORRECT ENDPOINT for adding favorites
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/userfavorites/favorites/",
+      );
+      final body = jsonEncode({"doctorId": doctorId, "userId": _userId});
+
+      final res = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: body,
+      );
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final saved = jsonDecode(res.body);
+        favouriteIds[doctorId] = saved["id"];
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Added to favourites"),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        // Revert on error
+        favouriteStatus[doctorId] = false;
+        if (mounted) setState(() {});
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Failed to add to favourites"),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      // Revert on error
+      favouriteStatus[doctorId] = false;
+      if (mounted) setState(() {});
+
+      print("Add favourite error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: ${e.toString()}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ⭐ Remove favourite - USING CORRECT ENDPOINT
+  Future<void> removeFavourite(String doctorId) async {
+    final favId = favouriteIds[doctorId];
+    if (favId == null) return;
+
+    // Optimistic UI update
+    favouriteStatus[doctorId] = false;
+    if (mounted) setState(() {});
+
+    try {
+      // ✅ CORRECT ENDPOINT for removing favorites
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/userfavorites/favorites/$favId",
+      );
+
+      final res = await http.delete(url);
+
+      if (res.statusCode == 200) {
+        favouriteIds[doctorId] = null;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Removed from favourites"),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        // Revert on error
+        favouriteStatus[doctorId] = true;
+        if (mounted) setState(() {});
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Failed to remove from favourites"),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      // Revert on error
+      favouriteStatus[doctorId] = true;
+      if (mounted) setState(() {});
+
+      print("Remove favourite error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: ${e.toString()}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<Map<String, dynamic>> fetchHospitalAds() async {
@@ -138,6 +312,11 @@ class _HospitalPage3State extends State<HospitalPage3> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  // ⭐ Refresh favourites
+  Future<void> _refreshFavourites() async {
+    await loadFavourites();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -166,6 +345,13 @@ class _HospitalPage3State extends State<HospitalPage3> {
             backgroundColor: Colors.transparent,
             elevation: 0,
             centerTitle: true,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.favorite),
+                onPressed: _refreshFavourites,
+                tooltip: "Refresh favourites",
+              ),
+            ],
           ),
         ),
       ),
@@ -174,7 +360,6 @@ class _HospitalPage3State extends State<HospitalPage3> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const AppLoadingWidget();
-            // return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
             return const Center(child: Text('Error loading doctors'));
           } else if (!snapshot.hasData) {
@@ -323,7 +508,7 @@ class _HospitalPage3State extends State<HospitalPage3> {
                             .where((entry) => entry.value.isNotEmpty)
                             .map(
                               (entry) => Padding(
-                                padding: EdgeInsets.all(20),
+                                padding: const EdgeInsets.all(20),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -347,8 +532,7 @@ class _HospitalPage3State extends State<HospitalPage3> {
                                   ],
                                 ),
                               ),
-                            )
-                            ,
+                            ),
 
                       const SizedBox(height: 30), // spacing between sections
                       // Video section in its own block
@@ -394,7 +578,7 @@ class _HospitalPage3State extends State<HospitalPage3> {
           );
         },
       ),
-      bottomNavigationBar: Footer(title: "none"),
+      bottomNavigationBar: const Footer(title: "none"),
     );
   }
 
@@ -407,162 +591,218 @@ class _HospitalPage3State extends State<HospitalPage3> {
     final doctorId = doctor['doctorId'] ?? '';
     final rating = doctor['rating'] ?? '0';
     final degree = doctor['degree'] ?? '';
+    final isFav = favouriteStatus[doctorId] == true;
 
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => HospitalPage4(doctorId: doctorId),
-          ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 20),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Doctor Image
-            Column(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    imageUrl.isNotEmpty ? imageUrl : "",
-                    height: 140,
-                    width: 120,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Image.asset(
-                        'lib/Assets/icons/doctor.png',
-                        height: 140,
-                        width: 120,
-                        fit: BoxFit.cover,
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ..._buildStarIcons(double.tryParse(rating) ?? 0.0),
-                    const SizedBox(width: 4),
-                    Text(
-                      rating,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => HospitalPage4(doctorId: doctorId),
+              ),
+            );
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 20),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
-            const SizedBox(width: 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Doctor Image
+                Column(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        imageUrl.isNotEmpty ? imageUrl : "",
+                        height: 140,
+                        width: 120,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Image.asset(
+                            'lib/Assets/icons/doctor.png',
+                            height: 140,
+                            width: 120,
+                            fit: BoxFit.cover,
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ..._buildStarIcons(double.tryParse(rating) ?? 0.0),
+                        const SizedBox(width: 4),
+                        Text(
+                          rating,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 16),
 
-            // Doctor Info + Buttons
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    doctorName,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    degree,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    designation,
-                    style: const TextStyle(fontSize: 15, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
+                // Doctor Info + Buttons
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      GestureDetector(
-                        onTap: () => _launchCaller(phone),
-                        child: _actionButton(
-                          FontAwesomeIcons.phone,
-                          Colors.lightBlueAccent,
+                      Text(
+                        doctorName,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      GestureDetector(
-                        onTap: () => _launchWhatsApp(phone),
-                        child: _actionButton(
-                          FontAwesomeIcons.whatsapp,
-                          Colors.green,
+                      const SizedBox(height: 4),
+                      Text(
+                        degree,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      _actionIcon(
-                        () => _launchMapLink(location),
-                        FontAwesomeIcons.mapMarkerAlt,
-                        const Color(0xFFFF5722),
+                      const SizedBox(height: 4),
+                      Text(
+                        designation,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => _launchCaller(phone),
+                            child: _actionButton(
+                              FontAwesomeIcons.phone,
+                              Colors.lightBlueAccent,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          GestureDetector(
+                            onTap: () => _launchWhatsApp(phone),
+                            child: _actionButton(
+                              FontAwesomeIcons.whatsapp,
+                              Colors.green,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          _actionIcon(
+                            () => _launchMapLink(location),
+                            FontAwesomeIcons.mapMarkerAlt,
+                            const Color(0xFFFF5722),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: 160,
+                        height: 45,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => DoctorSchedule(
+                                  doctorName: doctorName,
+                                  doctorId: doctorId,
+                                  doctorNo: phone,
+                                ),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color.fromARGB(
+                              255,
+                              234,
+                              29,
+                              29,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                          child: const Text(
+                            "Book Now",
+                            style: TextStyle(fontSize: 14, color: Colors.white),
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: 160,
-                    height: 45,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => DoctorSchedule(
-                              doctorName: doctorName,
-                              doctorId: doctorId,
-                              doctorNo: phone,
-                            ),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color.fromARGB(255, 234, 29, 29),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                      ),
-                      child: const Text(
-                        "Book Now",
-                        style: TextStyle(fontSize: 14, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+
+        // ❤️ Favourite button
+        Positioned(
+          right: 10,
+          top: 10,
+          child: StatefulBuilder(
+            builder: (context, refresh) {
+              return GestureDetector(
+                onTap: () async {
+                  if (isFav) {
+                    await removeFavourite(doctorId);
+                  } else {
+                    await addFavourite(doctorId);
+                  }
+                  // Force UI refresh
+                  if (mounted) {
+                    refresh(() {});
+                    setState(() {});
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    isFav ? Icons.favorite : Icons.favorite_border,
+                    color: isFav ? Colors.red : Colors.grey,
+                    size: 24,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 

@@ -145,13 +145,6 @@
       ]
     },
     {
-      "name": "font_awesome_flutter",
-      "version": "10.8.0",
-      "dependencies": [
-        "flutter"
-      ]
-    },
-    {
       "name": "flutter_rating_bar",
       "version": "4.0.1",
       "dependencies": [
@@ -166,6 +159,13 @@
         "flutter",
         "http",
         "path_provider"
+      ]
+    },
+    {
+      "name": "font_awesome_flutter",
+      "version": "10.8.0",
+      "dependencies": [
+        "flutter"
       ]
     },
     {

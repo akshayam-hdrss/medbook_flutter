@@ -2,60 +2,215 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:medbook/components/Footer.dart';
 import 'package:medbook/components/common/loading_widget.dart';
-import 'package:medbook/pages/DoctorSchedule/DoctorSchedule.dart';
 import 'dart:convert';
 import 'package:medbook/pages/Hospitals/HospitalPage4.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:medbook/Services/secure_storage_service.dart';
 
 class DoctorsPage2 extends StatefulWidget {
   final String doctorTypeId;
   final String? selectedDistrict;
   final String? selectedArea;
-  const DoctorsPage2({super.key, required this.doctorTypeId,this.selectedDistrict,this.selectedArea});
+
+  const DoctorsPage2({
+    super.key,
+    required this.doctorTypeId,
+    this.selectedDistrict,
+    this.selectedArea,
+  });
 
   @override
   State<DoctorsPage2> createState() => _DoctorsPage2State();
 }
 
 class _DoctorsPage2State extends State<DoctorsPage2> {
-  late Future<List<Map<String, dynamic>>> _doctors;
+  // Make _doctors nullable to handle initialization properly
+  Future<List<Map<String, dynamic>>>? _doctors;
+
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _filteredDoctors = [];
   List<Map<String, dynamic>> _allDoctors = [];
   String _selectedArea = 'All Areas';
   List<String> _availableAreas = ['All Areas'];
 
-  @override
+  // ⭐ Favourite system
+  Map<String, bool> favouriteStatus = {};
+  Map<String, int?> favouriteIds = {};
+  String? _userId;
 
+  @override
   void initState() {
     super.initState();
-    _doctors = fetchDoctors(widget.doctorTypeId).then((doctors) {
-      _allDoctors = List.from(doctors);
-
-      final areas =
-          doctors
-              .map((doc) => doc['location']?.toString().trim())
-              .where(
-                (loc) =>
-                    loc != null &&
-                    loc.isNotEmpty &&
-                    loc.toLowerCase() != 'unknown',
-              )
-              .toSet()
-              .toList()
-            ..sort();
-
-      setState(() {
-        _filteredDoctors = List.from(_allDoctors);
-        _availableAreas = ['All Areas', ...areas.cast<String>()];
-      });
-
-      return doctors;
-    });
+    _initializeData();
   }
 
+  // ⭐ Initialize all data
+  Future<void> _initializeData() async {
+    await _loadUserId();
+    await loadFavourites();
+
+    // Initialize _doctors future
+    _doctors = _fetchAndProcessDoctors();
+  }
+
+  // ⭐ Load user ID from secure storage
+  Future<void> _loadUserId() async {
+    final storage = SecureStorageService();
+    final user = await storage.getUserDetails();
+    _userId = user?["id"]?.toString();
+  }
+
+  // ⭐ Fetch and process doctors
+  Future<List<Map<String, dynamic>>> _fetchAndProcessDoctors() async {
+    try {
+      final doctors = await fetchDoctors(widget.doctorTypeId);
+
+      if (mounted) {
+        setState(() {
+          _allDoctors = List.from(doctors);
+          _filteredDoctors = List.from(_allDoctors);
+
+          // Extract areas
+          final areas =
+              doctors
+                  .map((doc) => doc['location']?.toString().trim())
+                  .where(
+                    (loc) =>
+                        loc != null &&
+                        loc.isNotEmpty &&
+                        loc.toLowerCase() != 'unknown',
+                  )
+                  .toSet()
+                  .toList()
+                ..sort();
+
+          _availableAreas = ['All Areas', ...areas.cast<String>()];
+        });
+      }
+
+      return doctors;
+    } catch (e) {
+      print("Error fetching doctors: $e");
+      rethrow;
+    }
+  }
+
+  // ⭐ Fetch favourite doctors - USING SPECIFIC USER ID ENDPOINT
+  Future<void> loadFavourites() async {
+    if (_userId == null) return;
+
+    try {
+      // ✅ CORRECT ENDPOINT: Use userfavorites/favorites/userId to get favorites for specific user
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/userfavorites/favorites/$_userId",
+      );
+      final res = await http.get(url);
+
+      if (res.statusCode != 200) {
+        print("Failed to load favorites: ${res.statusCode}");
+        return;
+      }
+
+      final List data = jsonDecode(res.body);
+
+      favouriteStatus.clear();
+      favouriteIds.clear();
+
+      for (var fav in data) {
+        // Since we're fetching for specific user, all favorites belong to this user
+        final doctorId = fav["doctorId"]?.toString();
+        if (doctorId != null) {
+          favouriteStatus[doctorId] = true;
+          favouriteIds[doctorId] = fav["id"];
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print("Favourite load error: $e");
+    }
+  }
+
+  // ⭐ Add favourite
+  Future<void> addFavourite(String doctorId) async {
+    if (_userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please login to add favourites")),
+      );
+      return;
+    }
+
+    // Optimistic UI update
+    favouriteStatus[doctorId] = true;
+    setState(() {});
+
+    try {
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/userfavorites/favorites",
+      );
+      final body = jsonEncode({"doctorId": doctorId, "userId": _userId});
+
+      final res = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: body,
+      );
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final saved = jsonDecode(res.body);
+        favouriteIds[doctorId] = saved["id"];
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Added to favourites")));
+      } else {
+        // Revert on error
+        favouriteStatus[doctorId] = false;
+        setState(() {});
+      }
+    } catch (e) {
+      // Revert on error
+      favouriteStatus[doctorId] = false;
+      setState(() {});
+    }
+  }
+
+  // ⭐ Remove favourite
+  Future<void> removeFavourite(String doctorId) async {
+    final favId = favouriteIds[doctorId];
+    if (favId == null) return;
+
+    // Optimistic UI update
+    favouriteStatus[doctorId] = false;
+    setState(() {});
+
+    try {
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/userfavorites/favorites/$favId",
+      );
+
+      final res = await http.delete(url);
+
+      if (res.statusCode == 200) {
+        favouriteIds[doctorId] = null;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Removed from favourites")),
+        );
+      } else {
+        // Revert on error
+        favouriteStatus[doctorId] = true;
+        setState(() {});
+      }
+    } catch (e) {
+      // Revert on error
+      favouriteStatus[doctorId] = true;
+      setState(() {});
+    }
+  }
+
+  // ⭐ Fetch doctors list
   Future<List<Map<String, dynamic>>> fetchDoctors(String id) async {
     final storage = SecureStorageService();
     final selectedArea = await storage.getSelectedArea() ?? '';
@@ -63,22 +218,22 @@ class _DoctorsPage2State extends State<DoctorsPage2> {
 
     final url =
         'https://medbook-backend-1.onrender.com/api/doctor?doctorTypeId=$id&location=$selectedArea&district=$selectedDistrict';
+
     final response = await http.get(Uri.parse(url));
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
       final List<dynamic> doctorList = data['resultData'];
 
-      // ✅ Sort by order_no (nulls last)
       doctorList.sort((a, b) {
         final aOrder = a['order_no'];
         final bOrder = b['order_no'];
 
-        if (aOrder == null && bOrder == null) return 0; // both null → equal
-        if (aOrder == null) return 1; // a is null → goes last
-        if (bOrder == null) return -1; // b is null → goes last
+        if (aOrder == null && bOrder == null) return 0;
+        if (aOrder == null) return 1;
+        if (bOrder == null) return -1;
 
-        return (aOrder as int).compareTo(bOrder as int); // ascending
+        return (aOrder as int).compareTo(bOrder as int);
       });
 
       return doctorList.map<Map<String, dynamic>>((item) {
@@ -100,10 +255,12 @@ class _DoctorsPage2State extends State<DoctorsPage2> {
     }
   }
 
+  // ⭐ Search filter
   void _filterDoctors() {
     setState(() {
+      final query = _searchController.text.toLowerCase();
+
       _filteredDoctors = _allDoctors.where((doctor) {
-        final query = _searchController.text.toLowerCase();
         final nameMatch =
             query.isEmpty ||
             (doctor['name']?.toLowerCase().contains(query) ?? false) ||
@@ -119,42 +276,7 @@ class _DoctorsPage2State extends State<DoctorsPage2> {
     });
   }
 
-  Future<void> _makePhoneCall(String phoneNumber) async {
-    final Uri uri = Uri(scheme: 'tel', path: phoneNumber);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
-      _showError("Cannot make call.");
-    }
-  }
-
-  Future<void> _launchWhatsApp(String phoneNumber) async {
-    final cleanPhone = phoneNumber.replaceAll(' ', '').replaceAll('+', '');
-    final Uri uri = Uri.parse("https://wa.me/$cleanPhone");
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
-      _showError("Cannot open WhatsApp.");
-    }
-  }
-
-  Future<void> _launchMapLink(String location) async {
-    final Uri uri = Uri.parse(
-      "https://www.google.com/maps/search/?api=1&query=$location",
-    );
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
-      _showError("Cannot open map.");
-    }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
+  // ⭐ UI Building
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -185,407 +307,303 @@ class _DoctorsPage2State extends State<DoctorsPage2> {
           ),
         ),
       ),
+
+      // BODY
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _doctors,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const AppLoadingWidget();
-            // return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            return const Center(child: Text("Error loading doctors"));
-          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(
-            child: Text(
-              'No doctors available'
-              '${widget.selectedArea != null && widget.selectedArea!.isNotEmpty && widget.selectedArea != 'All Areas' ? ' in ${widget.selectedArea}' : ''}'
-              '${widget.selectedDistrict != null && widget.selectedDistrict!.isNotEmpty ? ', ${widget.selectedDistrict}' : ''}',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text("Error loading doctors"),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _doctors = _fetchAndProcessDoctors();
+                      });
+                    },
+                    child: const Text("Retry"),
+                  ),
+                ],
               ),
-            ),
-          );
-
-
+            );
+          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text("No doctors available"));
           }
 
           return Column(
             children: [
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.orange.withOpacity(0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Search by doctor name ',
-                          hintStyle: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 15,
-                          ),
-                          prefixIcon: Container(
-                            padding: const EdgeInsets.all(14),
-                            child: const Icon(
-                              Icons.search_rounded,
-                              color: Color(0xFFF37A20),
-                              size: 26,
-                            ),
-                          ),
-                          suffixIcon: _searchController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: Icon(
-                                    Icons.close_rounded,
-                                    color: Colors.grey.shade400,
-                                    size: 22,
-                                  ),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    _filterDoctors();
-                                    FocusScope.of(context).unfocus();
-                                  },
-                                )
-                              : null,
-                          filled: true,
-                          fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 2,
-                            horizontal: 18,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide.none,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: Color(0xFFF37A20).withOpacity(0.6),
-                              width: 1.8,
-                            ),
-                          ),
-                        ),
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade800,
-                        ),
-                        onChanged: (value) => _filterDoctors(),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: Colors.grey.shade200,
-                          width: 1.5,
-                        ),
-                      ),
-                      child: DropdownButton<String>(
-                        value: _selectedArea,
-                        isExpanded: true,
-                        underline: const SizedBox(),
-                        icon: Icon(
-                          Icons.arrow_drop_down_rounded,
-                          color: Colors.grey.shade600,
-                          size: 28,
-                        ),
-                        items: _availableAreas.map((area) {
-                          return DropdownMenuItem<String>(
-                            value: area,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              child: Text(
-                                area,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: Colors.grey.shade800,
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          _selectedArea = value!;
-                          _filterDoctors();
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              _buildSearchAndFilter(),
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    if (_filteredDoctors.isEmpty)
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.only(top: 50),
-                          child: Text(
-                            'No doctors found matching your search',
-                            style: TextStyle(fontSize: 16, color: Colors.grey),
-                          ),
-                        ),
+                child: _filteredDoctors.isEmpty
+                    ? const Center(child: Text("No doctors match your search"))
+                    : ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: _filteredDoctors
+                            .map((doctor) => _buildDoctorCard(doctor))
+                            .toList(),
                       ),
-                    ..._filteredDoctors.map(
-                      (doctor) => _buildDoctorCard(doctor),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
               ),
             ],
           );
         },
       ),
+
       bottomNavigationBar: const Footer(title: "none"),
     );
   }
 
-  Widget _buildDoctorCard(Map<String, dynamic> doctor) {
-    final phone = doctor['phone'] ?? '';
-    final location = doctor['location'] ?? '';
-    final imageUrl = doctor['imageUrl'] ?? '';
-    final doctorName = doctor['name'] ?? '';
-    final doctorId = doctor['id'].toString();
-    final rating = doctor['rating'] ?? '4.5';
-    final degree = doctor['degree'] ?? '';
-    final speciality = doctor['speciality'] ?? '';
-    final businessName = doctor['businessName'] ?? '';
-
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => HospitalPage4(doctorId: doctorId),
+  // ⭐ Search + Filter UI
+  Widget _buildSearchAndFilter() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 20),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
+        ],
+      ),
+      child: Column(
+        children: [
+          // SEARCH BOX
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search doctor',
+              prefixIcon: const Icon(Icons.search, color: Colors.orange),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _searchController.clear();
+                        _filterDoctors();
+                      },
+                    )
+                  : null,
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
             ),
-          ],
+            onChanged: (value) => _filterDoctors(),
+          ),
+          const SizedBox(height: 14),
+
+          // AREA FILTER
+          DropdownButton<String>(
+            value: _selectedArea,
+            isExpanded: true,
+            underline: const SizedBox(),
+            items: _availableAreas.map((area) {
+              return DropdownMenuItem<String>(value: area, child: Text(area));
+            }).toList(),
+            onChanged: (value) {
+              setState(() {
+                _selectedArea = value!;
+              });
+              _filterDoctors();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ⭐ Doctor Card with Favourite
+  Widget _buildDoctorCard(Map<String, dynamic> doctor) {
+    final doctorId = doctor['id'].toString();
+    final isFav = favouriteStatus[doctorId] == true;
+
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => HospitalPage4(doctorId: doctorId),
+              ),
+            );
+          },
+          child: _doctorCardUI(doctor),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Column(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    imageUrl.isNotEmpty ? imageUrl : "",
-                    height: 140,
-                    width: 120,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Image.asset(
-                        'lib/Assets/icons/doctor.png',
-                        height: 140,
-                        width: 120,
-                        fit: BoxFit.cover,
-                      );
-                    },
+
+        // ❤️ Favourite button
+        Positioned(
+          right: 10,
+          top: 10,
+          child: StatefulBuilder(
+            builder: (context, refresh) {
+              return GestureDetector(
+                onTap: () async {
+                  if (isFav) {
+                    await removeFavourite(doctorId);
+                  } else {
+                    await addFavourite(doctorId);
+                  }
+                  refresh(() {});
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
+                  child: Icon(
+                    isFav ? Icons.favorite : Icons.favorite_border,
+                    color: isFav ? Colors.red : Colors.grey,
+                    size: 24,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ⭐ Doctor Card UI Content
+  Widget _doctorCardUI(Map<String, dynamic> doctor) {
+    final imageUrl = doctor['imageUrl'] ?? '';
+    final name = doctor['name'] ?? '';
+    final rating = doctor['rating'] ?? '0.0';
+    final location = doctor['location'] ?? '';
+    final degree = doctor['degree'] ?? '';
+    final businessName = doctor['businessName'] ?? '';
+    final speciality = doctor['speciality'] ?? '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // IMAGE
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              imageUrl,
+              height: 130,
+              width: 110,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Image.asset(
+                'lib/Assets/icons/doctor.png',
+                height: 130,
+                width: 110,
+                fit: BoxFit.cover,
+              ),
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  height: 130,
+                  width: 110,
+                  color: Colors.grey[200],
+                  child: const Center(child: AppLoadingWidget()),
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(width: 16),
+
+          // DETAILS
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                if (degree.isNotEmpty)
+                  Text(
+                    degree,
+                    style: const TextStyle(fontSize: 14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                if (speciality.isNotEmpty)
+                  Text(
+                    speciality,
+                    style: const TextStyle(fontSize: 14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                if (businessName.isNotEmpty)
+                  Text(
+                    businessName,
+                    style: const TextStyle(fontSize: 14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on, color: Colors.grey, size: 16),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        location,
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 13,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    ..._buildStarIcons(double.tryParse(rating) ?? 0.0),
+                    const Icon(Icons.star, color: Colors.amber, size: 16),
                     const SizedBox(width: 4),
                     Text(
                       rating,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
               ],
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    doctorName,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    degree,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    businessName,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    location,
-                    style: const TextStyle(fontSize: 13, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      // ✅ These GestureDetectors prevent the parent onTap
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => _makePhoneCall(phone),
-                        child: _actionButton(
-                          FontAwesomeIcons.phone,
-                          Colors.lightBlueAccent,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => _launchWhatsApp(phone),
-                        child: _actionButton(
-                          FontAwesomeIcons.whatsapp,
-                          Colors.green,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => _launchMapLink(location),
-                        child: _actionIcon(
-                          () => _launchMapLink(location),
-                          FontAwesomeIcons.mapMarkerAlt,
-                          const Color(0xFFFF5722),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: 160,
-                    height: 45,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => DoctorSchedule(
-                              doctorName: doctorName,
-                              doctorId: doctorId,
-                              doctorNo: phone,
-                            ),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color.fromARGB(255, 234, 29, 29),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                      ),
-                      child: const Text(
-                        "Book Now",
-                        style: TextStyle(fontSize: 14, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _actionButton(IconData icon, Color color) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Center(child: FaIcon(icon, color: Colors.white, size: 18)),
-    );
-  }
-
-  List<Widget> _buildStarIcons(double rating) {
-    List<Widget> stars = [];
-    for (int i = 1; i <= 5; i++) {
-      if (i <= rating) {
-        stars.add(const Icon(Icons.star, color: Colors.amber, size: 16));
-      } else if (i - rating <= 0.5) {
-        stars.add(const Icon(Icons.star_half, color: Colors.amber, size: 16));
-      } else {
-        stars.add(const Icon(Icons.star_border, color: Colors.amber, size: 16));
-      }
-    }
-    return stars;
-  }
-
-  Widget _actionIcon(VoidCallback onTap, IconData icon, Color color) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Center(child: FaIcon(icon, color: Colors.white, size: 18)),
+          ),
+        ],
       ),
     );
   }

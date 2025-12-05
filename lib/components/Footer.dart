@@ -1,8 +1,10 @@
 // update nantha
 import 'package:flutter/material.dart';
 import 'package:medbook/components/Offers/offers.dart';
+import 'package:medbook/pages/Favourties/favourites_page.dart';
 import 'package:medbook/pages/Schedule/DoctorSchedulePage.dart';
 import 'package:medbook/pages/Schedule/doctor_list_page.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:medbook/pages/home_page.dart';
 import 'package:medbook/pages/complain.dart';
 import 'package:medbook/pages/services/service_page.dart'; // Complain Page
@@ -128,19 +130,17 @@ class _FooterState extends State<Footer> {
             },
           ),
 
-          _buildFooterButton(
-            iconPath: 'lib/Assets/footer_icons/emergency.png',
-            title: buttonTitles[1],
+          _buildFooterIconButton(
+            icon: FontAwesomeIcons.solidHeart,
+            title: "Favourites",
             isSelected: _selectedIndex == 1,
             onPressed: () {
-              if (widget.title != "Emergency") {
-                setState(() {
-                  _selectedIndex = 1;
-                });
+              if (widget.title != "Favourites") {
+                setState(() => _selectedIndex = 1);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => ServicePage(serviceId: '40'),
+                    builder: (context) => const FavouritesPage(),
                   ),
                 );
               }
@@ -157,7 +157,7 @@ class _FooterState extends State<Footer> {
     required bool isSelected,
     required VoidCallback onPressed,
   }) {
-    final bool isEmergency = title == "Emergency";
+    final bool isEmergency = title == "Favourites";
     final screenWidth = MediaQuery.of(context).size.width;
     final bool isSmallScreen = screenWidth < 350;
 
@@ -198,6 +198,45 @@ class _FooterState extends State<Footer> {
                       : const Color(0xFFA6A2A2),
                 ),
                 textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFooterIconButton({
+    required IconData icon,
+    required String title,
+    required bool isSelected,
+    required VoidCallback onPressed,
+  }) {
+    final bool isSmallScreen = MediaQuery.of(context).size.width < 350;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: onPressed,
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FaIcon(
+                icon,
+                size: isSmallScreen ? 22 : 28,
+                color: isSelected ? Colors.deepOrange : const Color(0xFFA6A2A2),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: isSmallScreen ? 7 : 10,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected
+                      ? Colors.deepOrange
+                      : const Color(0xFFA6A2A2),
+                ),
               ),
             ],
           ),

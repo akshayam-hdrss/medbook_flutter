@@ -210,32 +210,37 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               "Unknown Area";
         }
       }
-
-      // ✅ Dynamically remove directional suffixes (North, South, East, West)
+      // Remove North/South/East/West
       detectedDistrict = detectedDistrict.replaceAll(
         RegExp(r'\s+(North|South|East|West)$', caseSensitive: false),
         '',
       );
 
-      print("📍 District: $detectedDistrict | Area: $detectedArea");
+      // Remove common unwanted words
+      detectedDistrict = detectedDistrict
+          .replaceAll(
+            RegExp(r'(district|taluk|zone|region)$', caseSensitive: false),
+            '',
+          )
+          .trim();
 
-setState(() {
-  String normalized = detectedDistrict.trim();
+      print("📍 Cleaned District: $detectedDistrict | Area: $detectedArea");
 
-  // Match detected district with your dropdown names
-  selectedDistrict = tamilNaduData.keys.firstWhere(
-    (d) => normalized.toLowerCase().contains(d.toLowerCase()),
-    orElse: () => normalized,   // <-- FIX HERE
-  );
+      // Match with your Tamil Nadu dropdown list
+      String normalized = detectedDistrict.trim();
+      String matchedDistrict = tamilNaduData.keys.firstWhere(
+        (d) => normalized.toLowerCase().contains(d.toLowerCase()),
+        orElse: () => normalized,
+      );
 
-  selectedArea = detectedArea;
-});
+      setState(() {
+        selectedDistrict = matchedDistrict;
+        selectedArea = detectedArea;
+      });
 
-// Save the cleaned district & area
-await _secureStorageService.saveSelectedDistrict(selectedDistrict ?? '');
-await _secureStorageService.saveSelectedArea(selectedArea ?? '');
-
-
+      // Save the cleaned district & area
+      await _secureStorageService.saveSelectedDistrict(selectedDistrict ?? '');
+      await _secureStorageService.saveSelectedArea(selectedArea ?? '');
     } catch (e, s) {
       print('❌ Location Error: $e');
       print(s);

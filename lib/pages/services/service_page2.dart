@@ -6,6 +6,9 @@ import 'package:medbook/pages/ServiceSchedule/ServiceSchedule.dart';
 import 'package:medbook/pages/services/service_page3.dart';
 import 'package:medbook/utils/api_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:medbook/Services/secure_storage_service.dart';
 
 class ServicesPage2 extends StatefulWidget {
   final String serviceTypeId;
@@ -25,10 +28,15 @@ class _ServicesPage2State extends State<ServicesPage2> {
   String _selectedLocation = 'All Locations';
   List<String> locations = ['All Locations'];
 
+  // ⭐ Favourite system for SERVICES
+  Map<String, bool> favouriteStatus = {};
+  Map<String, int?> favouriteIds = {};
+  String? _userId;
+
   @override
   void initState() {
     super.initState();
-    loadServices();
+    _initializeData();
     _searchController.addListener(_filterServices);
   }
 
@@ -36,6 +44,174 @@ class _ServicesPage2State extends State<ServicesPage2> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  // ⭐ Initialize all data
+  Future<void> _initializeData() async {
+    await _loadUserId();
+    await loadFavourites();
+    await loadServices();
+  }
+
+  // ⭐ Load user ID from secure storage
+  Future<void> _loadUserId() async {
+    final storage = SecureStorageService();
+    final user = await storage.getUserDetails();
+    _userId = user?["id"]?.toString();
+  }
+
+  // ⭐ Fetch favourite SERVICES - USING SPECIFIC USER ID ENDPOINT
+  Future<void> loadFavourites() async {
+    if (_userId == null) return;
+
+    try {
+      // ✅ CORRECT ENDPOINT: Use userfavorites/favorites/userId to get favorites for specific user
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/userfavorites/favorites/$_userId",
+      );
+      final res = await http.get(url);
+
+      if (res.statusCode != 200) {
+        print("Failed to load favorites: ${res.statusCode}");
+        return;
+      }
+
+      final List data = jsonDecode(res.body);
+
+      favouriteStatus.clear();
+      favouriteIds.clear();
+
+      for (var fav in data) {
+        // Check for SERVICE favorites (not doctor)
+        final serviceId = fav["serviceId"]?.toString();
+        if (serviceId != null) {
+          favouriteStatus[serviceId] = true;
+          favouriteIds[serviceId] = fav["id"];
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print("Favourite load error: $e");
+    }
+  }
+
+  // ⭐ Add SERVICE to favourite - USING CORRECT ENDPOINT
+  Future<void> addFavourite(String serviceId) async {
+    if (_userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please login to add favourites")),
+      );
+      return;
+    }
+
+    // Optimistic UI update
+    favouriteStatus[serviceId] = true;
+    if (mounted) setState(() {});
+
+    try {
+      // ✅ CORRECT ENDPOINT for adding SERVICE favorites
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/userfavorites/favorites/",
+      );
+      final body = jsonEncode({"serviceId": serviceId, "userId": _userId});
+
+      final res = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: body,
+      );
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final saved = jsonDecode(res.body);
+        favouriteIds[serviceId] = saved["id"];
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Added to favourites"),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        // Revert on error
+        favouriteStatus[serviceId] = false;
+        if (mounted) setState(() {});
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Failed to add to favourites"),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      // Revert on error
+      favouriteStatus[serviceId] = false;
+      if (mounted) setState(() {});
+
+      print("Add favourite error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: ${e.toString()}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ⭐ Remove SERVICE from favourite - USING CORRECT ENDPOINT
+  Future<void> removeFavourite(String serviceId) async {
+    final favId = favouriteIds[serviceId];
+    if (favId == null) return;
+
+    // Optimistic UI update
+    favouriteStatus[serviceId] = false;
+    if (mounted) setState(() {});
+
+    try {
+      // ✅ CORRECT ENDPOINT for removing SERVICE favorites
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/userfavorites/favorites/$favId",
+      );
+
+      final res = await http.delete(url);
+
+      if (res.statusCode == 200) {
+        favouriteIds[serviceId] = null;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Removed from favourites"),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        // Revert on error
+        favouriteStatus[serviceId] = true;
+        if (mounted) setState(() {});
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Failed to remove from favourites"),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      // Revert on error
+      favouriteStatus[serviceId] = true;
+      if (mounted) setState(() {});
+
+      print("Remove favourite error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: ${e.toString()}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> loadServices() async {
@@ -116,6 +292,11 @@ class _ServicesPage2State extends State<ServicesPage2> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  // ⭐ Refresh favourites
+  Future<void> _refreshFavourites() async {
+    await loadFavourites();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -143,6 +324,13 @@ class _ServicesPage2State extends State<ServicesPage2> {
             backgroundColor: Colors.transparent,
             elevation: 0,
             iconTheme: const IconThemeData(color: Colors.white),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.favorite),
+                onPressed: _refreshFavourites,
+                tooltip: "Refresh favourites",
+              ),
+            ],
           ),
         ),
       ),
@@ -318,165 +506,245 @@ class _ServicesPage2State extends State<ServicesPage2> {
                             final businessName = service['businessName'] ?? '';
                             final rating = service['rating'] ?? '0.0';
                             final serviceId = service['id'].toString();
+                            final isFav = favouriteStatus[serviceId] == true;
 
-                            return GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        ServicesPage3(serviceId: serviceId),
-                                  ),
-                                );
-                              },
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 20),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 4),
+                            return Stack(
+                              children: [
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            ServicesPage3(serviceId: serviceId),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 20),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image.network(
-                                        imageUrl.isNotEmpty ? imageUrl : "",
-                                        height: 140,
-                                        width: 120,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (context, error, stackTrace) {
-                                          return Image.asset(
-                                            'lib/Assets/images/product_page2/dummy.jpg',
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          child: Image.network(
+                                            imageUrl.isNotEmpty ? imageUrl : "",
                                             height: 140,
                                             width: 120,
                                             fit: BoxFit.cover,
-                                          );
-                                        },
-                                      ),
-                                    ),
+                                            errorBuilder:
+                                                (context, error, stackTrace) {
+                                                  return Image.asset(
+                                                    'lib/Assets/images/product_page2/dummy.jpg',
+                                                    height: 140,
+                                                    width: 120,
+                                                    fit: BoxFit.cover,
+                                                  );
+                                                },
+                                          ),
+                                        ),
 
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            name,
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            businessName,
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            location,
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              color: Colors.grey,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Row(
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
-                                              ..._buildStarIcons(
-                                                double.tryParse(rating) ?? 0.0,
-                                              ),
-                                              const SizedBox(width: 4),
                                               Text(
-                                                rating,
+                                                name,
                                                 style: const TextStyle(
-                                                  fontSize: 13,
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                businessName,
+                                                style: const TextStyle(
+                                                  fontSize: 14,
                                                   fontWeight: FontWeight.w500,
                                                 ),
                                               ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 10),
-                                          Row(
-                                            children: [
-                                              GestureDetector(
-                                                onTap: () =>
-                                                    _makePhoneCall(phone),
-                                                child: _actionButton(
-                                                  FontAwesomeIcons.phone,
-                                                  Colors.lightBlueAccent,
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                location,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.grey,
                                                 ),
                                               ),
-                                              const SizedBox(width: 12),
-                                              GestureDetector(
-                                                onTap: () =>
-                                                    _launchWhatsApp(phone),
-                                                child: _actionButton(
-                                                  FontAwesomeIcons.whatsapp,
-                                                  Colors.green,
-                                                ),
+                                              const SizedBox(height: 8),
+                                              Row(
+                                                children: [
+                                                  ..._buildStarIcons(
+                                                    double.tryParse(rating) ??
+                                                        0.0,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    rating,
+                                                    style: const TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                              const SizedBox(width: 12),
-                                              _actionIcon(
-                                                () => _launchMapLink(location),
-                                                FontAwesomeIcons.mapMarkerAlt,
-                                                const Color(0xFFFF5722),
+                                              const SizedBox(height: 10),
+                                              Row(
+                                                children: [
+                                                  GestureDetector(
+                                                    onTap: () =>
+                                                        _makePhoneCall(phone),
+                                                    child: _actionButton(
+                                                      FontAwesomeIcons.phone,
+                                                      Colors.lightBlueAccent,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  GestureDetector(
+                                                    onTap: () =>
+                                                        _launchWhatsApp(phone),
+                                                    child: _actionButton(
+                                                      FontAwesomeIcons.whatsapp,
+                                                      Colors.green,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  _actionIcon(
+                                                    () => _launchMapLink(
+                                                      location,
+                                                    ),
+                                                    FontAwesomeIcons
+                                                        .mapMarkerAlt,
+                                                    const Color(0xFFFF5722),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 12),
+                                              SizedBox(
+                                                width: 160,
+                                                height: 45,
+                                                child: ElevatedButton(
+                                                  onPressed: () {
+                                                    Navigator.push(
+                                                      context,
+                                                      MaterialPageRoute(
+                                                        builder: (context) =>
+                                                            ServiceSchedule(
+                                                              serviceName: name,
+                                                              serviceId:
+                                                                  serviceId,
+                                                              servicePhone:
+                                                                  phone,
+                                                            ),
+                                                      ),
+                                                    );
+                                                  },
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        const Color.fromARGB(
+                                                          255,
+                                                          234,
+                                                          29,
+                                                          29,
+                                                        ),
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                    ),
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 10,
+                                                        ),
+                                                  ),
+                                                  child: const Text(
+                                                    "Book Now",
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                ),
                                               ),
                                             ],
                                           ),
-                                          const SizedBox(height: 12),
-                  SizedBox(
-                    width: 160,
-                    height: 45,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ServiceSchedule(
-                              serviceName: name,
-                              serviceId: serviceId,
-                              servicePhone: phone,
-                            ),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color.fromARGB(255, 234, 29, 29),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                      ),
-                      child: const Text(
-                        "Book Now",
-                        style: TextStyle(fontSize: 14, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                
-                                        ],
-                                      ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              ),
+
+                                // ❤️ Favourite button for SERVICES
+                                Positioned(
+                                  right: 10,
+                                  top: 10,
+                                  child: StatefulBuilder(
+                                    builder: (context, refresh) {
+                                      return GestureDetector(
+                                        onTap: () async {
+                                          if (isFav) {
+                                            await removeFavourite(serviceId);
+                                          } else {
+                                            await addFavourite(serviceId);
+                                          }
+                                          // Force UI refresh
+                                          if (mounted) {
+                                            refresh(() {});
+                                            setState(() {});
+                                          }
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(
+                                                  0.1,
+                                                ),
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Icon(
+                                            isFav
+                                                ? Icons.favorite
+                                                : Icons.favorite_border,
+                                            color: isFav
+                                                ? Colors.red
+                                                : Colors.grey,
+                                            size: 24,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
                             );
                           },
                         ),
