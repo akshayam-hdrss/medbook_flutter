@@ -8,6 +8,9 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:medbook/pages/home_page.dart';
 import 'package:medbook/pages/complain.dart';
 import 'package:medbook/pages/services/service_page.dart'; // Complain Page
+import 'package:medbook/Services/secure_storage_service.dart';
+import 'package:medbook/pages/Schedule/DoctorManage.dart';
+import 'package:medbook/pages/Schedule/ServiceManage.dart';
 
 class Footer extends StatefulWidget {
   final String title; // Add the title parameter
@@ -96,19 +99,46 @@ class _FooterState extends State<Footer> {
             iconPath: 'lib/Assets/footer_icons/schedule.png',
             title: buttonTitles[2],
             isSelected: _selectedIndex == 2,
-            onPressed: () {
+            onPressed: () async {
               if (widget.title != "Schedule") {
                 setState(() {
                   _selectedIndex = 2;
                 });
-                // Navigator.push(
-                //   context,
-                //   MaterialPageRoute(builder: (context) => DoctorSchedulePage()),
-                // );
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const DoctorListPage()),
-                );
+
+                final storage = SecureStorageService();
+                final userDetails = await storage.getUserDetails();
+
+                if (userDetails != null) {
+                  var userData = userDetails;
+                  if (userData.containsKey('user')) {
+                    userData = userData['user'];
+                  }
+
+                  int isDoctor = userData['isDoctor'] ?? 0;
+                  int isService = userData['isService'] ?? 0;
+
+                  if (isDoctor == 1) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DoctorManage()),
+                    );
+                  } else if (isService == 1) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ServiceManage()),
+                    );
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DoctorListPage()),
+                    );
+                  }
+                } else {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DoctorListPage()),
+                  );
+                }
               }
             },
           ),

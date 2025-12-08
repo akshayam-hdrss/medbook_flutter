@@ -26,7 +26,7 @@ void main() {
   // Keep splash until app finishes loading
   FlutterNativeSplash.preserve(widgetsBinding: WidgetsBinding.instance);
 
-  NetworkConnection.checkInternetConnection();
+  // NetworkConnection.checkInternetConnection();
   runApp(const MyApp());
 }
 
