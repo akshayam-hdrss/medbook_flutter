@@ -92,7 +92,10 @@ class _MyAppState extends State<MyApp> {
               ? args['serviceId']
               : '16';
 
-          return ServicePage(serviceId: serviceId , mainServiceName: "emergency");
+          return ServicePage(
+            serviceId: serviceId,
+            mainServiceName: "emergency",
+          );
         },
       },
 
@@ -156,7 +159,6 @@ class _MyAppState extends State<MyApp> {
               const Scaffold(body: Center(child: Text('Page not found'))),
         );
       },
-
     );
   }
 }

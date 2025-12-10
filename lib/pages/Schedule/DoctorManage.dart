@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -28,6 +27,10 @@ class Appointment {
   final String? paymentImageUrl;
   final DateTime createdAt;
   final int? prescriptionID;
+  final String? bloodPressure;
+  final String? height;
+  final String? weight;
+  final String? sugar;
 
   Appointment({
     required this.id,
@@ -47,6 +50,10 @@ class Appointment {
     this.paymentImageUrl,
     required this.createdAt,
     this.prescriptionID,
+    this.bloodPressure,
+    this.height,
+    this.weight,
+    this.sugar,
   });
 
   factory Appointment.fromJson(Map<String, dynamic> json) {
@@ -68,6 +75,10 @@ class Appointment {
       paymentImageUrl: json['paymentImageUrl'],
       createdAt: DateTime.parse(json['createdAt']),
       prescriptionID: json['prescriptionID'],
+      bloodPressure: json['bloodPressure'],
+      height: json['height'],
+      weight: json['weight'],
+      sugar: json['sugar'],
     );
   }
 }
@@ -89,6 +100,13 @@ class _DoctorManageState extends State<DoctorManage> {
   String _filterStatus = 'All'; // 'All', 'Pending', 'Confirmed', 'Rescheduled'
   Timer? _timer;
 
+  // For Basic Tests
+  Appointment? _selectedAppointmentForTests;
+  final TextEditingController _bpController = TextEditingController();
+  final TextEditingController _heightController = TextEditingController();
+  final TextEditingController _weightController = TextEditingController();
+  final TextEditingController _sugarController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -101,6 +119,10 @@ class _DoctorManageState extends State<DoctorManage> {
   @override
   void dispose() {
     _timer?.cancel();
+    _bpController.dispose();
+    _heightController.dispose();
+    _weightController.dispose();
+    _sugarController.dispose();
     super.dispose();
   }
 
@@ -157,8 +179,9 @@ class _DoctorManageState extends State<DoctorManage> {
 
   Future<Map<String, dynamic>?> _getPrescription(int id) async {
     try {
-      final url =
-          Uri.parse("https://medbook-backend-1.onrender.com/api/prescription/getbyid/$id");
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/prescription/getbyid/$id",
+      );
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -174,7 +197,6 @@ class _DoctorManageState extends State<DoctorManage> {
       return null;
     }
   }
-
 
   void _filterAppointments() {
     setState(() {
@@ -212,6 +234,262 @@ class _DoctorManageState extends State<DoctorManage> {
   int get _futureCount {
     final now = DateTime.now();
     return _appointments.where((a) => a.date.isAfter(now)).length;
+  }
+
+  // Update Basic Tests function
+  Future<void> _updateBasicTests() async {
+    if (_selectedAppointmentForTests == null) return;
+
+    try {
+      // Format date correctly for MySQL (YYYY-MM-DD)
+      final scheduleDate = _selectedAppointmentForTests!.date;
+      final formattedDate = DateFormat('yyyy-MM-dd').format(scheduleDate);
+
+      // Format time correctly
+      String formattedTime = _selectedAppointmentForTests!.time;
+      if (formattedTime.length == 5) {
+        formattedTime = '${formattedTime}:00';
+      }
+
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/bookings/${_selectedAppointmentForTests!.id}",
+      );
+
+      final body = {
+        "status": _selectedAppointmentForTests!.status,
+        "remarks": _selectedAppointmentForTests!.remarks,
+        "date": formattedDate,
+        "time": formattedTime,
+        "userId": _selectedAppointmentForTests!.userId,
+        "doctorId": _selectedAppointmentForTests!.doctorId,
+        "bloodPressure": _bpController.text.trim(),
+        "height": _heightController.text.trim(),
+        "weight": _weightController.text.trim(),
+        "sugar": _sugarController.text.trim(),
+        "editedBy": "doctor",
+      };
+
+      final response = await http.put(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Basic tests saved successfully"),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Clear controllers
+        _bpController.clear();
+        _heightController.clear();
+        _weightController.clear();
+        _sugarController.clear();
+
+        // Close dialog and refresh appointments
+        Navigator.of(context).pop(); // Close basic tests dialog
+        _fetchAppointments();
+
+        // Refresh the appointment details dialog if it's open
+        if (_selectedAppointmentForTests != null) {
+          // Find the updated appointment
+          final updatedAppointment = _appointments.firstWhere(
+            (a) => a.id == _selectedAppointmentForTests!.id,
+            orElse: () => _selectedAppointmentForTests!,
+          );
+
+          // Show updated details
+          _showAppointmentDetails(updatedAppointment);
+        }
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception("Failed to save basic tests: ${error['error']}");
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  // Show Basic Tests Dialog
+  void _showBasicTestsDialog(Appointment appointment) {
+    _selectedAppointmentForTests = appointment;
+
+    // Pre-fill existing values
+    _bpController.text = appointment.bloodPressure ?? '';
+    _heightController.text = appointment.height ?? '';
+    _weightController.text = appointment.weight ?? '';
+    _sugarController.text = appointment.sugar ?? '';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Basic Tests", style: TextStyle(color: Colors.blue)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _bpController,
+                decoration: const InputDecoration(
+                  labelText: "Blood Pressure",
+                  hintText: "e.g., 120/80",
+                  suffixText: "mmHg",
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.text,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _sugarController,
+                decoration: const InputDecoration(
+                  labelText: "Sugar Level",
+                  hintText: "e.g., 110",
+                  suffixText: "mg/dL",
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.text,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _heightController,
+                      decoration: const InputDecoration(
+                        labelText: "Height",
+                        hintText: "e.g., 170",
+                        suffixText: "cm",
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _weightController,
+                      decoration: const InputDecoration(
+                        labelText: "Weight",
+                        hintText: "e.g., 70",
+                        suffixText: "kg",
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                ],
+              ),
+
+              // Show existing values if available
+              if (appointment.bloodPressure != null ||
+                  appointment.height != null ||
+                  appointment.weight != null ||
+                  appointment.sugar != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Current Values:",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 8,
+                        children: [
+                          if (appointment.bloodPressure != null)
+                            _buildCurrentValue(
+                              "BP",
+                              "${appointment.bloodPressure} mmHg",
+                            ),
+                          if (appointment.sugar != null)
+                            _buildCurrentValue(
+                              "Sugar",
+                              "${appointment.sugar} mg/dL",
+                            ),
+                          if (appointment.height != null)
+                            _buildCurrentValue(
+                              "Height",
+                              "${appointment.height} cm",
+                            ),
+                          if (appointment.weight != null)
+                            _buildCurrentValue(
+                              "Weight",
+                              "${appointment.weight} kg",
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _bpController.clear();
+              _heightController.clear();
+              _weightController.clear();
+              _sugarController.clear();
+            },
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: _updateBasicTests,
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+            child: const Text(
+              "Save Tests",
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentValue(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -681,7 +959,10 @@ class _DoctorManageState extends State<DoctorManage> {
                       ),
                       child: const Row(
                         children: [
-                          Icon(FontAwesomeIcons.userDoctor, color: Colors.white),
+                          Icon(
+                            FontAwesomeIcons.userDoctor,
+                            color: Colors.white,
+                          ),
                           SizedBox(width: 10),
                           Text(
                             "Appointment Details",
@@ -701,7 +982,10 @@ class _DoctorManageState extends State<DoctorManage> {
                             appointment.patientName,
                             icon: Icons.person,
                           ),
-                          _buildDetailRow("Age", appointment.patientAge?.toString() ?? ""),
+                          _buildDetailRow(
+                            "Age",
+                            appointment.patientAge?.toString() ?? "",
+                          ),
                           _buildDetailRow(
                             "Contact",
                             appointment.contactNumber,
@@ -710,10 +994,173 @@ class _DoctorManageState extends State<DoctorManage> {
                           ),
                           _buildDetailRow(
                             "Date",
-                            DateFormat('EEE, MMM d, y').format(appointment.date),
+                            DateFormat(
+                              'EEE, MMM d, y',
+                            ).format(appointment.date),
                           ),
-                          _buildDetailRow("Time", _formatTime(appointment.time)),
+                          _buildDetailRow(
+                            "Time",
+                            _formatTime(appointment.time),
+                          ),
+
+                          // Basic Tests Button
+                          const SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              _showBasicTestsDialog(appointment);
+                            },
+                            icon: const Icon(
+                              Icons.medical_services_outlined,
+                              size: 20,
+                            ),
+                            label: const Text("Basic Tests"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue.shade50,
+                              foregroundColor: Colors.blue,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(color: Colors.blue.shade300),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+
+                          if (appointment.prescriptionID != null)
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                Navigator.pop(context);
+
+                                final prescription = await _getPrescription(
+                                  appointment.prescriptionID!,
+                                );
+
+                                if (prescription != null) {
+                                  _showPrescriptionDialog(prescription);
+                                }
+                              },
+                              icon: const Icon(
+                                Icons.receipt_long,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                              label: const Text(
+                                "View Prescription",
+                                style: TextStyle(color: Colors.white),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.teal,
+                                side: BorderSide.none,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                minimumSize: const Size(double.infinity, 48),
+                              ),
+                            ),
+
                           const SizedBox(height: 16),
+
+                          // Basic Tests Results Display
+                          if (appointment.bloodPressure != null ||
+                              appointment.height != null ||
+                              appointment.weight != null ||
+                              appointment.sugar != null) ...[
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.blue.shade100),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.assignment,
+                                        color: Colors.blue.shade700,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        "Basic Tests Results",
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.blue,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green,
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          "RECORDED",
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Wrap(
+                                    spacing: 12,
+                                    runSpacing: 12,
+                                    children: [
+                                      if (appointment.bloodPressure != null)
+                                        _buildTestResultCard(
+                                          "Blood Pressure",
+                                          appointment.bloodPressure!,
+                                          "mmHg",
+                                          Icons.favorite_border,
+                                          Colors.red.shade100,
+                                        ),
+                                      if (appointment.sugar != null)
+                                        _buildTestResultCard(
+                                          "Sugar Level",
+                                          appointment.sugar!,
+                                          "mg/dL",
+                                          Icons.bloodtype,
+                                          Colors.green.shade100,
+                                        ),
+                                      if (appointment.height != null)
+                                        _buildTestResultCard(
+                                          "Height",
+                                          appointment.height!,
+                                          "cm",
+                                          Icons.height,
+                                          Colors.blue.shade100,
+                                        ),
+                                      if (appointment.weight != null)
+                                        _buildTestResultCard(
+                                          "Weight",
+                                          appointment.weight!,
+                                          "kg",
+                                          Icons.monitor_weight,
+                                          Colors.orange.shade100,
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+
                           const Text(
                             "Status",
                             style: TextStyle(fontWeight: FontWeight.bold),
@@ -739,31 +1186,6 @@ class _DoctorManageState extends State<DoctorManage> {
                           ),
                           const SizedBox(height: 10),
 
-if (appointment.prescriptionID != null)
-  OutlinedButton.icon(
-    onPressed: () async {
-      Navigator.pop(context);
-
-      final prescription =
-          await _getPrescription(appointment.prescriptionID!);
-
-      if (prescription != null) {
-        _showPrescriptionDialog(prescription);
-      }
-    },
-    icon: const Icon(Icons.receipt_long, color: Colors.white, size: 18),
-    label: const Text("View Prescription",
-        style: TextStyle(color: Colors.white)),
-    style: OutlinedButton.styleFrom(
-      backgroundColor: Colors.teal,
-      side: BorderSide.none,
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      minimumSize: const Size(double.infinity, 48),
-    ),
-  ),
-
-const SizedBox(height: 10),
-
                           const SizedBox(height: 16),
                           const Text(
                             "Remarks",
@@ -787,10 +1209,7 @@ const SizedBox(height: 10),
                           OutlinedButton.icon(
                             onPressed: () {
                               Navigator.pop(context);
-                              _updateBooking(
-                                appointment,
-                                status: "confirmed",
-                              );
+                              _updateBooking(appointment, status: "confirmed");
                             },
                             icon: const Icon(
                               Icons.check_box,
@@ -848,73 +1267,89 @@ const SizedBox(height: 10),
     );
   }
 
-  void _showPrescriptionDialog(Map<String, dynamic> prescription) {
-  String formatDate(String? dateString) {
-    if (dateString == null) return "N/A";
-    try {
-      final date = DateTime.parse(dateString);
-      return DateFormat('dd MMM yyyy').format(date);
-    } catch (_) {
-      return dateString;
-    }
+  Widget _buildTestResultCard(
+    String title,
+    String value,
+    String unit,
+    IconData icon,
+    Color color,
+  ) {
+    return Container(
+      width: 130,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            unit,
+            style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+          ),
+        ],
+      ),
+    );
   }
 
-  showDialog(
-    context: context,
-    builder: (context) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Center(
-                child: Text(
-                  "Prescription Details",
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red,
+  void _showPrescriptionDialog(Map<String, dynamic> prescription) {
+    String formatDate(String? dateString) {
+      if (dateString == null) return "N/A";
+      try {
+        final date = DateTime.parse(dateString);
+        return DateFormat('dd MMM yyyy').format(date);
+      } catch (_) {
+        return dateString;
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Center(
+                  child: Text(
+                    "Prescription Details",
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // 🔹 Patient Info
-              Card(
-                color: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.red.shade100),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("👤 Patient: ${prescription['patientName'] ?? 'N/A'}",
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 4),
-                      Text("🎂 Age: ${prescription['age'] ?? 'N/A'}"),
-                      const SizedBox(height: 4),
-                      Text("🏠 Address: ${prescription['address'] ?? 'N/A'}"),
-                      const SizedBox(height: 4),
-                      Text("🗓️ Date: ${formatDate(prescription['date'])}"),
-                      const SizedBox(height: 4),
-                      Text(
-                          "🔁 Next Visit: ${formatDate(prescription['nextVisit'])}"),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // 🔹 Description
-              if (prescription['description'] != null &&
-                  prescription['description'].toString().isNotEmpty)
+                // 🔹 Patient Info
                 Card(
                   color: Colors.white,
                   shape: RoundedRectangleBorder(
@@ -926,214 +1361,279 @@ const SizedBox(height: 10),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "📝 Description",
-                          style: TextStyle(
+                        Text(
+                          "👤 Patient: ${prescription['patientName'] ?? 'N/A'}",
+                          style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
-                            color: Colors.red,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
+                        Text("🎂 Age: ${prescription['age'] ?? 'N/A'}"),
+                        const SizedBox(height: 4),
+                        Text("🏠 Address: ${prescription['address'] ?? 'N/A'}"),
+                        const SizedBox(height: 4),
+                        Text("🗓️ Date: ${formatDate(prescription['date'])}"),
+                        const SizedBox(height: 4),
                         Text(
-                          prescription['description'] ?? '',
-                          style: const TextStyle(fontSize: 14),
+                          "🔁 Next Visit: ${formatDate(prescription['nextVisit'])}",
                         ),
                       ],
                     ),
                   ),
                 ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // 🔹 Medications Table
-              const Text(
-                "💊 Medications & Instructions",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red,
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              if (prescription['prescription'] != null &&
-                  prescription['prescription'] is List &&
-                  (prescription['prescription'] as List).isNotEmpty)
-                Card(
-                  color: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.red.shade100),
-                  ),
-                  child: Table(
-                    border: TableBorder.symmetric(
-                      inside: BorderSide(color: Colors.grey.shade300),
-                      outside: BorderSide(color: Colors.grey.shade300),
+                // 🔹 Description
+                if (prescription['description'] != null &&
+                    prescription['description'].toString().isNotEmpty)
+                  Card(
+                    color: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.red.shade100),
                     ),
-                    columnWidths: const {
-                      0: FlexColumnWidth(3), // Medicine
-                      1: FlexColumnWidth(1), // Qty
-                      2: FlexColumnWidth(2), // Before/After
-                      3: FlexColumnWidth(1), // Breakfast
-                      4: FlexColumnWidth(1), // Lunch
-                      5: FlexColumnWidth(1), // Dinner
-                    },
-                    children: [
-                      // Header Row
-                      const TableRow(
-                        decoration:
-                            BoxDecoration(color: Color(0xFFFAEAEA)), // light red
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: Text("Medicine",
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 14)),
+                          const Text(
+                            "📝 Description",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.red,
+                            ),
                           ),
-                          Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: Text("Qty",
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 14)),
-                          ),
-                          Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: Text("Before/After",
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 14)),
-                          ),
-                          Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: Text("B",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 14)),
-                          ),
-                          Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: Text("L",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 14)),
-                          ),
-                          Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: Text("D",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 14)),
+                          const SizedBox(height: 6),
+                          Text(
+                            prescription['description'] ?? '',
+                            style: const TextStyle(fontSize: 14),
                           ),
                         ],
                       ),
+                    ),
+                  ),
 
-                      // Medicine Rows
-                      ...(prescription['prescription'] as List)
-                          .asMap()
-                          .entries
-                          .map<TableRow>((entry) {
-                        final item = entry.value;
-                        final isEven = entry.key % 2 == 0;
+                const SizedBox(height: 16),
 
-                        return TableRow(
+                // 🔹 Medications Table
+                const Text(
+                  "💊 Medications & Instructions",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                if (prescription['prescription'] != null &&
+                    prescription['prescription'] is List &&
+                    (prescription['prescription'] as List).isNotEmpty)
+                  Card(
+                    color: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.red.shade100),
+                    ),
+                    child: Table(
+                      border: TableBorder.symmetric(
+                        inside: BorderSide(color: Colors.grey.shade300),
+                        outside: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      columnWidths: const {
+                        0: FlexColumnWidth(3), // Medicine
+                        1: FlexColumnWidth(1), // Qty
+                        2: FlexColumnWidth(2), // Before/After
+                        3: FlexColumnWidth(1), // Breakfast
+                        4: FlexColumnWidth(1), // Lunch
+                        5: FlexColumnWidth(1), // Dinner
+                      },
+                      children: [
+                        // Header Row
+                        const TableRow(
                           decoration: BoxDecoration(
-                            color: isEven
-                                ? Colors.red.shade50
-                                : Colors.white, // alternate row color
-                          ),
+                            color: Color(0xFFFAEAEA),
+                          ), // light red
                           children: [
                             Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Text(item['medicine'] ?? ''),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Text(item['quantity']?.toString() ?? ''),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Text(item['beforeAfterFood'] ?? ''),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Icon(
-                                item['breakfast'] == true
-                                    ? Icons.check_circle
-                                    : Icons.cancel,
-                                color: item['breakfast'] == true
-                                    ? Colors.green
-                                    : Colors.redAccent,
-                                size: 18,
+                              padding: EdgeInsets.all(8.0),
+                              child: Text(
+                                "Medicine",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
                             Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Icon(
-                                item['lunch'] == true
-                                    ? Icons.check_circle
-                                    : Icons.cancel,
-                                color: item['lunch'] == true
-                                    ? Colors.green
-                                    : Colors.redAccent,
-                                size: 18,
+                              padding: EdgeInsets.all(8.0),
+                              child: Text(
+                                "Qty",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
                             Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Icon(
-                                item['dinner'] == true
-                                    ? Icons.check_circle
-                                    : Icons.cancel,
-                                color: item['dinner'] == true
-                                    ? Colors.green
-                                    : Colors.redAccent,
-                                size: 18,
+                              padding: EdgeInsets.all(8.0),
+                              child: Text(
+                                "Before/After",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Text(
+                                "B",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Text(
+                                "L",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Text(
+                                "D",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
                           ],
-                        );
-                      }).toList(),
-                    ],
-                  ),
-                )
-              else
-                const Text("No prescription details available."),
+                        ),
 
-              const SizedBox(height: 20),
+                        // Medicine Rows
+                        ...(prescription['prescription'] as List)
+                            .asMap()
+                            .entries
+                            .map<TableRow>((entry) {
+                              final item = entry.value;
+                              final isEven = entry.key % 2 == 0;
 
-              // 🔹 Close Button
-              Center(
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 10, horizontal: 24),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Colors.red, Colors.deepOrange],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
+                              return TableRow(
+                                decoration: BoxDecoration(
+                                  color: isEven
+                                      ? Colors.red.shade50
+                                      : Colors.white, // alternate row color
+                                ),
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: Text(item['medicine'] ?? ''),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: Text(
+                                      item['quantity']?.toString() ?? '',
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: Text(item['beforeAfterFood'] ?? ''),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: Icon(
+                                      item['breakfast'] == true
+                                          ? Icons.check_circle
+                                          : Icons.cancel,
+                                      color: item['breakfast'] == true
+                                          ? Colors.green
+                                          : Colors.redAccent,
+                                      size: 18,
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: Icon(
+                                      item['lunch'] == true
+                                          ? Icons.check_circle
+                                          : Icons.cancel,
+                                      color: item['lunch'] == true
+                                          ? Colors.green
+                                          : Colors.redAccent,
+                                      size: 18,
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: Icon(
+                                      item['dinner'] == true
+                                          ? Icons.check_circle
+                                          : Icons.cancel,
+                                      color: item['dinner'] == true
+                                          ? Colors.green
+                                          : Colors.redAccent,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            })
+                            .toList(),
+                      ],
                     ),
-                    child: const Text(
-                      "Close",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                  )
+                else
+                  const Text("No prescription details available."),
+
+                const SizedBox(height: 20),
+
+                // 🔹 Close Button
+                Center(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                        horizontal: 24,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Colors.red, Colors.deepOrange],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        "Close",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
-
-
-
+    );
+  }
 
   void _showRescheduleForm(Appointment appointment) {
     DateTime? selDate;
@@ -1275,7 +1775,6 @@ const SizedBox(height: 10),
       );
     }
   }
-}
 
   String _formatTime(String time) {
     try {
@@ -1331,3 +1830,4 @@ const SizedBox(height: 10),
       ),
     );
   }
+}
