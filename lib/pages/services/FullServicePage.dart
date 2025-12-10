@@ -190,6 +190,7 @@ class _FullServicePageState extends State<FullServicePage> {
                           MaterialPageRoute(
                             builder: (context) => ServicePage0(
                               serviceId: serviceId.toString(),
+                              mainServiceName: service['serviceName'],
                               // ✅ use service, not item
                             ),
                           ),

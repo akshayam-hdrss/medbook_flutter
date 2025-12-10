@@ -711,6 +711,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                     MaterialPageRoute(
                                       builder: (context) => ServicePage0(
                                         serviceId: service['id'].toString(),
+                                        mainServiceName:
+                                            service['serviceName'],
                                       ),
                                     ),
                                   );

@@ -1,3 +1,4 @@
+
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -153,6 +154,27 @@ class _DoctorManageState extends State<DoctorManage> {
       }
     }
   }
+
+  Future<Map<String, dynamic>?> _getPrescription(int id) async {
+    try {
+      final url =
+          Uri.parse("https://medbook-backend-1.onrender.com/api/prescription/getbyid/$id");
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data;
+      } else {
+        throw Exception("Failed to fetch prescription: ${response.statusCode}");
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error fetching prescription: $e")),
+      );
+      return null;
+    }
+  }
+
 
   void _filterAppointments() {
     setState(() {
@@ -625,158 +647,650 @@ class _DoctorManageState extends State<DoctorManage> {
   void _showAppointmentDetails(Appointment appointment) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        titlePadding: EdgeInsets.zero,
-        contentPadding: const EdgeInsets.all(20),
+      builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: Container(
-          padding: const EdgeInsets.all(15),
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Color.fromARGB(255, 225, 119, 20),
-                Color.fromARGB(255, 239, 48, 34),
-              ],
-              stops: [0.0, 0.5],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(15),
-              topRight: Radius.circular(15),
-            ),
-          ),
-          child: const Row(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return Container(
+              width: constraints.maxWidth > 600 ? 500 : double.infinity,
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.9,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.all(15),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Color.fromARGB(255, 225, 119, 20),
+                            Color.fromARGB(255, 239, 48, 34),
+                          ],
+                          stops: [0.0, 0.5],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(15),
+                          topRight: Radius.circular(15),
+                        ),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(FontAwesomeIcons.userDoctor, color: Colors.white),
+                          SizedBox(width: 10),
+                          Text(
+                            "Appointment Details",
+                            style: TextStyle(color: Colors.white, fontSize: 18),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Content
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildDetailRow(
+                            "Patient",
+                            appointment.patientName,
+                            icon: Icons.person,
+                          ),
+                          _buildDetailRow("Age", appointment.patientAge?.toString() ?? ""),
+                          _buildDetailRow(
+                            "Contact",
+                            appointment.contactNumber,
+                            icon: Icons.phone,
+                            isLink: true,
+                          ),
+                          _buildDetailRow(
+                            "Date",
+                            DateFormat('EEE, MMM d, y').format(appointment.date),
+                          ),
+                          _buildDetailRow("Time", _formatTime(appointment.time)),
+                          const SizedBox(height: 16),
+                          const Text(
+                            "Status",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Container(
+                            margin: const EdgeInsets.only(top: 5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              appointment.status.toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+
+if (appointment.prescriptionID != null)
+  OutlinedButton.icon(
+    onPressed: () async {
+      Navigator.pop(context);
+
+      final prescription =
+          await _getPrescription(appointment.prescriptionID!);
+
+      if (prescription != null) {
+        _showPrescriptionDialog(prescription);
+      }
+    },
+    icon: const Icon(Icons.receipt_long, color: Colors.white, size: 18),
+    label: const Text("View Prescription",
+        style: TextStyle(color: Colors.white)),
+    style: OutlinedButton.styleFrom(
+      backgroundColor: Colors.teal,
+      side: BorderSide.none,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      minimumSize: const Size(double.infinity, 48),
+    ),
+  ),
+
+const SizedBox(height: 10),
+
+                          const SizedBox(height: 16),
+                          const Text(
+                            "Remarks",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(top: 5),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: Text(
+                              appointment.remarks.isNotEmpty
+                                  ? appointment.remarks
+                                  : "No remarks provided",
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _updateBooking(
+                                appointment,
+                                status: "confirmed",
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.check_box,
+                              color: Colors.white,
+                            ),
+                            label: const Text(
+                              "Confirm",
+                              style: TextStyle(color: Colors.white),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: const Color(0xFF66BB6A),
+                              side: BorderSide.none,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              minimumSize: const Size(double.infinity, 48),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _showRescheduleForm(appointment);
+                            },
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              side: BorderSide(color: Colors.amber.shade700),
+                              minimumSize: const Size(double.infinity, 48),
+                            ),
+                            child: Text(
+                              "Reschedule",
+                              style: TextStyle(color: Colors.amber.shade700),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              minimumSize: const Size(double.infinity, 48),
+                            ),
+                            child: const Text(
+                              "Close",
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showPrescriptionDialog(Map<String, dynamic> prescription) {
+  String formatDate(String? dateString) {
+    if (dateString == null) return "N/A";
+    try {
+      final date = DateTime.parse(dateString);
+      return DateFormat('dd MMM yyyy').format(date);
+    } catch (_) {
+      return dateString;
+    }
+  }
+
+  showDialog(
+    context: context,
+    builder: (context) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(FontAwesomeIcons.userDoctor, color: Colors.white),
-              SizedBox(width: 10),
-              Text(
-                "Appointment Details",
-                style: TextStyle(color: Colors.white, fontSize: 18),
+              const Center(
+                child: Text(
+                  "Prescription Details",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 🔹 Patient Info
+              Card(
+                color: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.red.shade100),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("👤 Patient: ${prescription['patientName'] ?? 'N/A'}",
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16)),
+                      const SizedBox(height: 4),
+                      Text("🎂 Age: ${prescription['age'] ?? 'N/A'}"),
+                      const SizedBox(height: 4),
+                      Text("🏠 Address: ${prescription['address'] ?? 'N/A'}"),
+                      const SizedBox(height: 4),
+                      Text("🗓️ Date: ${formatDate(prescription['date'])}"),
+                      const SizedBox(height: 4),
+                      Text(
+                          "🔁 Next Visit: ${formatDate(prescription['nextVisit'])}"),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // 🔹 Description
+              if (prescription['description'] != null &&
+                  prescription['description'].toString().isNotEmpty)
+                Card(
+                  color: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.red.shade100),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "📝 Description",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.red,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          prescription['description'] ?? '',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              const SizedBox(height: 16),
+
+              // 🔹 Medications Table
+              const Text(
+                "💊 Medications & Instructions",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              if (prescription['prescription'] != null &&
+                  prescription['prescription'] is List &&
+                  (prescription['prescription'] as List).isNotEmpty)
+                Card(
+                  color: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.red.shade100),
+                  ),
+                  child: Table(
+                    border: TableBorder.symmetric(
+                      inside: BorderSide(color: Colors.grey.shade300),
+                      outside: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    columnWidths: const {
+                      0: FlexColumnWidth(3), // Medicine
+                      1: FlexColumnWidth(1), // Qty
+                      2: FlexColumnWidth(2), // Before/After
+                      3: FlexColumnWidth(1), // Breakfast
+                      4: FlexColumnWidth(1), // Lunch
+                      5: FlexColumnWidth(1), // Dinner
+                    },
+                    children: [
+                      // Header Row
+                      const TableRow(
+                        decoration:
+                            BoxDecoration(color: Color(0xFFFAEAEA)), // light red
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: Text("Medicine",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 14)),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: Text("Qty",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 14)),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: Text("Before/After",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 14)),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: Text("B",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 14)),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: Text("L",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 14)),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: Text("D",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 14)),
+                          ),
+                        ],
+                      ),
+
+                      // Medicine Rows
+                      ...(prescription['prescription'] as List)
+                          .asMap()
+                          .entries
+                          .map<TableRow>((entry) {
+                        final item = entry.value;
+                        final isEven = entry.key % 2 == 0;
+
+                        return TableRow(
+                          decoration: BoxDecoration(
+                            color: isEven
+                                ? Colors.red.shade50
+                                : Colors.white, // alternate row color
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Text(item['medicine'] ?? ''),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Text(item['quantity']?.toString() ?? ''),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Text(item['beforeAfterFood'] ?? ''),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Icon(
+                                item['breakfast'] == true
+                                    ? Icons.check_circle
+                                    : Icons.cancel,
+                                color: item['breakfast'] == true
+                                    ? Colors.green
+                                    : Colors.redAccent,
+                                size: 18,
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Icon(
+                                item['lunch'] == true
+                                    ? Icons.check_circle
+                                    : Icons.cancel,
+                                color: item['lunch'] == true
+                                    ? Colors.green
+                                    : Colors.redAccent,
+                                size: 18,
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Icon(
+                                item['dinner'] == true
+                                    ? Icons.check_circle
+                                    : Icons.cancel,
+                                color: item['dinner'] == true
+                                    ? Colors.green
+                                    : Colors.redAccent,
+                                size: 18,
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                )
+              else
+                const Text("No prescription details available."),
+
+              const SizedBox(height: 20),
+
+              // 🔹 Close Button
+              Center(
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 10, horizontal: 24),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Colors.red, Colors.deepOrange],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      "Close",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildDetailRow(
-              "Contact",
-              appointment.contactNumber,
-              icon: Icons.phone,
-              isLink: true,
-            ),
-            _buildDetailRow(
-              "Date",
-              DateFormat('EEE, MMM d, y').format(appointment.date),
-            ),
-            _buildDetailRow("Time", _formatTime(appointment.time)),
-            const SizedBox(height: 16),
-            if (appointment.status.toLowerCase() == 'confirmed')
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () {
-                    // Implement view prescription logic
-                  },
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.amber.shade700),
-                    foregroundColor: Colors.amber.shade700,
-                  ),
-                  child: const Text("View Prescription"),
+      ),
+    ),
+  );
+}
+
+
+
+
+  void _showRescheduleForm(Appointment appointment) {
+    DateTime? selDate;
+    TimeOfDay? selTime;
+    TextEditingController remarkCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      "Reschedule Appointment",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final d = await showDatePicker(
+                          context: context,
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime(2100),
+                          initialDate: appointment.date,
+                        );
+                        if (d != null) setState(() => selDate = d);
+                      },
+                      child: Text(
+                        selDate == null
+                            ? "Select Date"
+                            : DateFormat('yyyy-MM-dd').format(selDate!),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final t = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.now(),
+                        );
+                        if (t != null) setState(() => selTime = t);
+                      },
+                      child: Text(
+                        selTime == null
+                            ? "Select Time"
+                            : selTime!.format(context),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: remarkCtrl,
+                      decoration: const InputDecoration(
+                        labelText: "Remarks",
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+
+                        final formattedTime = selTime != null
+                            ? "${selTime!.hour.toString().padLeft(2, '0')}:${selTime!.minute.toString().padLeft(2, '0')}:00"
+                            : appointment.time;
+
+                        _updateBooking(
+                          appointment,
+                          status: "rescheduled",
+                          date: selDate,
+                          time: formattedTime,
+                          remarks: remarkCtrl.text,
+                        );
+                      },
+                      child: const Text("Save"),
+                    ),
+                  ],
                 ),
-              ),
-            const SizedBox(height: 16),
-            const Text("Status", style: TextStyle(fontWeight: FontWeight.bold)),
-            Container(
-              margin: const EdgeInsets.only(top: 5),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.green, // Adjust dynamic color if needed
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                appointment.status.toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              "Remarks",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(top: 5),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: Text(
-                appointment.remarks.isNotEmpty
-                    ? appointment.remarks
-                    : "No remarks provided",
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: () {
-                    // Confirm action
-                  },
-                  icon: const Icon(Icons.check_box, color: Colors.white),
-                  label: const Text(
-                    "Confirmed",
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: const Color(0xFF66BB6A),
-                    side: BorderSide.none,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                OutlinedButton(
-                  onPressed: () {},
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: BorderSide(color: Colors.amber.shade700),
-                  ),
-                  child: Text(
-                    "Prescription",
-                    style: TextStyle(color: Colors.amber.shade700),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: const Text(
-                    "Close",
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-              ],
-            ),
+              );
+            },
           ),
-        ],
+        ),
       ),
     );
+  }
+
+  Future<void> _updateBooking(
+    Appointment appointment, {
+    required String status,
+    String? remarks,
+    DateTime? date,
+    String? time,
+  }) async {
+    try {
+      final url = Uri.parse(
+        "https://medbook-backend-1.onrender.com/api/bookings/${appointment.id}",
+      );
+
+      final body = {
+        "status": status,
+        "remarks": remarks ?? "",
+        "date": date != null
+            ? DateFormat('yyyy-MM-dd').format(date)
+            : DateFormat('yyyy-MM-dd').format(appointment.date),
+        "time": time ?? appointment.time,
+        "userId": appointment.userId,
+        "doctorId": appointment.doctorId,
+        "editedBy": "doctor",
+      };
+
+      final response = await http.put(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Booking updated successfully"),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _fetchAppointments();
+      } else {
+        throw Exception("Failed to update appointment");
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+      );
+    }
+  }
+}
+
+  String _formatTime(String time) {
+    try {
+      final parsed = DateFormat("HH:mm:ss").parse(time);
+      return DateFormat("hh:mm a").format(parsed);
+    } catch (_) {
+      return time;
+    }
+  }
+
+  Future<void> _launchPhone(String phoneNumber) async {
+    final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+    }
   }
 
   Widget _buildDetailRow(
@@ -817,20 +1331,3 @@ class _DoctorManageState extends State<DoctorManage> {
       ),
     );
   }
-
-  String _formatTime(String time) {
-    try {
-      final parsed = DateFormat("HH:mm:ss").parse(time);
-      return DateFormat("hh:mm a").format(parsed);
-    } catch (_) {
-      return time;
-    }
-  }
-
-  Future<void> _launchPhone(String phoneNumber) async {
-    final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
-    if (await canLaunchUrl(launchUri)) {
-      await launchUrl(launchUri);
-    }
-  }
-}

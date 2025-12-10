@@ -260,7 +260,7 @@ class _FavouritesPageState extends State<FavouritesPage> {
   void _navigateToServiceDetails(String serviceId) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ServicesPage3(serviceId: serviceId)),
+      MaterialPageRoute(builder: (_) => ServicesPage3(serviceId: serviceId, mainServiceName: "emergency")),
     );
   }
 

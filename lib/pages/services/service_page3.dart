@@ -10,8 +10,13 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class ServicesPage3 extends StatefulWidget {
   final String serviceId;
+  final String mainServiceName;
 
-  const ServicesPage3({super.key, required this.serviceId});
+  const ServicesPage3({
+    super.key,
+    required this.serviceId,
+    required this.mainServiceName,
+  });
 
   @override
   State<ServicesPage3> createState() => _ServicesPage3State();
@@ -56,6 +61,17 @@ class _ServicesPage3State extends State<ServicesPage3> {
     _autoScrollTimer?.cancel();
     commentController.dispose();
     super.dispose();
+  }
+
+  // ⭐ Helper method to get trimmed service name
+  String _getTrimmedServiceName() {
+    return widget.mainServiceName.trim();
+  }
+
+  // ⭐ Check if Book Now button should be shown
+  bool _shouldShowBookNowButton() {
+    final trimmedName = _getTrimmedServiceName();
+    return trimmedName == "Fitness Care" || trimmedName == "Beauty Care";
   }
 
   Future<void> loadServiceDetails() async {
@@ -393,45 +409,47 @@ class _ServicesPage3State extends State<ServicesPage3> {
                                       const Color(0xFFFF5722),
                                     ),
                                   ),
-                                  const SizedBox(height: 12),
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ServiceSchedule(
-                                    serviceName: serviceDetails?['serviceName']?.toString() ?? '',
-                              serviceId: serviceDetails?['_id']?.toString() ?? '',
-                              servicePhone: phoneNumber,
-                                  ),
-                                ),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color.fromARGB(
-                                255,
-                                234,
-                                29,
-                                29,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 30,
-                                vertical: 12,
-                              ),
-                            ),
-                            child: const Text(
-                              "Book Now",
-                              style: TextStyle(color: Colors.white),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                        
+                                  const SizedBox(width: 12),
                                 ],
                               ),
                             ),
+                            const SizedBox(height: 12),
+                            // ⭐ Conditionally show Book Now button based on mainServiceName
+                            if (_shouldShowBookNowButton())
+                              ElevatedButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ServiceSchedule(
+                                        serviceName: serviceDetails?['serviceName']?.toString() ?? '',
+                                        serviceId: serviceDetails?['_id']?.toString() ?? '',
+                                        servicePhone: phoneNumber,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color.fromARGB(
+                                    255,
+                                    234,
+                                    29,
+                                    29,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 30,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                child: const Text(
+                                  "Book Now",
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ),
+                            const SizedBox(height: 12),
                           ],
                         ),
                       ),
@@ -672,7 +690,6 @@ class _ServicesPage3State extends State<ServicesPage3> {
                           progressIndicatorColor: Colors.redAccent,
                         ),
                         builder: (context, player) => ClipRRect(
-                          // borderRadius: BorderRadius.circular(12),
                           child: player,
                         ),
                       ),
@@ -729,19 +746,4 @@ class _ServicesPage3State extends State<ServicesPage3> {
       bottomNavigationBar: const Footer(title: "none"),
     );
   }
-}
-
-Widget _actionIcon(VoidCallback onTap, IconData icon, Color color) {
-  return GestureDetector(
-    onTap: onTap,
-    child: Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Center(child: FaIcon(icon, color: Colors.white, size: 18)),
-    ),
-  );
 }

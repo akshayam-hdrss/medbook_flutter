@@ -12,8 +12,13 @@ import 'package:medbook/Services/secure_storage_service.dart';
 
 class ServicesPage2 extends StatefulWidget {
   final String serviceTypeId;
+  final String mainServiceName;
 
-  const ServicesPage2({super.key, required this.serviceTypeId});
+  const ServicesPage2({
+    super.key,
+    required this.serviceTypeId,
+    required this.mainServiceName,
+  });
 
   @override
   State<ServicesPage2> createState() => _ServicesPage2State();
@@ -44,6 +49,17 @@ class _ServicesPage2State extends State<ServicesPage2> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  // ⭐ Helper method to get trimmed service name
+  String _getTrimmedServiceName() {
+    return widget.mainServiceName.trim();
+  }
+
+  // ⭐ Check if Book Now button should be shown
+  bool _shouldShowBookNowButton() {
+    final trimmedName = _getTrimmedServiceName();
+    return trimmedName == "Fitness Care" || trimmedName == "Beauty Care";
   }
 
   // ⭐ Initialize all data
@@ -297,6 +313,47 @@ class _ServicesPage2State extends State<ServicesPage2> {
     await loadFavourites();
   }
 
+  Widget _actionButton(IconData icon, Color color) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Center(child: FaIcon(icon, color: Colors.white, size: 18)),
+    );
+  }
+
+  List<Widget> _buildStarIcons(double rating) {
+    List<Widget> stars = [];
+    for (int i = 1; i <= 5; i++) {
+      if (i <= rating) {
+        stars.add(const Icon(Icons.star, color: Colors.amber, size: 16));
+      } else if (i - rating <= 0.5) {
+        stars.add(const Icon(Icons.star_half, color: Colors.amber, size: 16));
+      } else {
+        stars.add(const Icon(Icons.star_border, color: Colors.amber, size: 16));
+      }
+    }
+    return stars;
+  }
+
+  Widget _actionIcon(VoidCallback onTap, IconData icon, Color color) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(child: FaIcon(icon, color: Colors.white, size: 18)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -509,7 +566,10 @@ class _ServicesPage2State extends State<ServicesPage2> {
                                       context,
                                       MaterialPageRoute(
                                         builder: (context) =>
-                                            ServicesPage3(serviceId: serviceId),
+                                            ServicesPage3(
+                                              serviceId: serviceId, 
+                                              mainServiceName: widget.mainServiceName
+                                            ),
                                       ),
                                     );
                                   },
@@ -631,54 +691,56 @@ class _ServicesPage2State extends State<ServicesPage2> {
                                                 ],
                                               ),
                                               const SizedBox(height: 12),
-                                              SizedBox(
-                                                width: 160,
-                                                height: 45,
-                                                child: ElevatedButton(
-                                                  onPressed: () {
-                                                    Navigator.push(
-                                                      context,
-                                                      MaterialPageRoute(
-                                                        builder: (context) =>
-                                                            ServiceSchedule(
-                                                              serviceName: name,
-                                                              serviceId:
-                                                                  serviceId,
-                                                              servicePhone:
-                                                                  phone,
+                                              // ⭐ Conditionally show Book Now button based on mainServiceName
+                                              if (_shouldShowBookNowButton())
+                                                SizedBox(
+                                                  width: 160,
+                                                  height: 45,
+                                                  child: ElevatedButton(
+                                                    onPressed: () {
+                                                      Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(
+                                                          builder: (context) =>
+                                                              ServiceSchedule(
+                                                            serviceName: name,
+                                                            serviceId:
+                                                                serviceId,
+                                                            servicePhone:
+                                                                phone,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor:
+                                                          const Color.fromARGB(
+                                                            255,
+                                                            234,
+                                                            29,
+                                                            29,
+                                                          ),
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              8,
                                                             ),
                                                       ),
-                                                    );
-                                                  },
-                                                  style: ElevatedButton.styleFrom(
-                                                    backgroundColor:
-                                                        const Color.fromARGB(
-                                                          255,
-                                                          234,
-                                                          29,
-                                                          29,
-                                                        ),
-                                                    shape: RoundedRectangleBorder(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            8,
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 12,
+                                                            vertical: 10,
                                                           ),
                                                     ),
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 12,
-                                                          vertical: 10,
-                                                        ),
-                                                  ),
-                                                  child: const Text(
-                                                    "Book Now",
-                                                    style: TextStyle(
-                                                      fontSize: 14,
-                                                      color: Colors.white,
+                                                    child: const Text(
+                                                      "Book Now",
+                                                      style: TextStyle(
+                                                        fontSize: 14,
+                                                        color: Colors.white,
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
-                                              ),
                                             ],
                                           ),
                                         ),
@@ -747,45 +809,4 @@ class _ServicesPage2State extends State<ServicesPage2> {
       bottomNavigationBar: const Footer(title: "none"),
     );
   }
-
-  Widget _actionButton(IconData icon, Color color) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Center(child: FaIcon(icon, color: Colors.white, size: 18)),
-    );
-  }
-
-  List<Widget> _buildStarIcons(double rating) {
-    List<Widget> stars = [];
-    for (int i = 1; i <= 5; i++) {
-      if (i <= rating) {
-        stars.add(const Icon(Icons.star, color: Colors.amber, size: 16));
-      } else if (i - rating <= 0.5) {
-        stars.add(const Icon(Icons.star_half, color: Colors.amber, size: 16));
-      } else {
-        stars.add(const Icon(Icons.star_border, color: Colors.amber, size: 16));
-      }
-    }
-    return stars;
-  }
-}
-
-Widget _actionIcon(VoidCallback onTap, IconData icon, Color color) {
-  return GestureDetector(
-    onTap: onTap,
-    child: Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Center(child: FaIcon(icon, color: Colors.white, size: 18)),
-    ),
-  );
 }

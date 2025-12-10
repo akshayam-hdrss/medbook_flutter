@@ -12,8 +12,14 @@ import 'package:http/http.dart' as http;
 
 class ServicePage extends StatefulWidget {
   final String serviceId;
+  final String mainServiceName;
 
-  const ServicePage({super.key, required this.serviceId});
+  // const ServicePage({super.key, required this.serviceId});
+  const ServicePage({
+    super.key,
+    required this.serviceId,
+    required this.mainServiceName,
+  });
 
   @override
   State<ServicePage> createState() => _ServicePageState();
@@ -233,6 +239,7 @@ class _ServicePageState extends State<ServicePage> {
                                   MaterialPageRoute(
                                     builder: (context) => ServicesPage2(
                                       serviceTypeId: item['id'].toString(),
+                                      mainServiceName: widget.mainServiceName,
                                     ),
                                   ),
                                 );
