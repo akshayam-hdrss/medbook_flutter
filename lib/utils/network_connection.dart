@@ -1,102 +1,129 @@
+// network_connection.dart - WITH BETTER ERROR HANDLING
 import 'package:flutter/material.dart';
-import 'package:get/get.dart'; // Import GetX for dialogs
+import 'package:get/get.dart';
 import 'package:internet_connection_checker/internet_connection_checker.dart';
-import 'package:flutter_easyloading/flutter_easyloading.dart'; // For loading indicator
 
 class NetworkConnection {
-  static bool isDialogOpen = false;  // Flag to track if dialog is open
+  static bool isDialogOpen = false;
+  static bool isInitialized = false;
 
   static void checkInternetConnection() {
-    // Initial check for internet connection (just in case)
-    _checkConnectionStatus();
+    if (isInitialized) return;
+    isInitialized = true;
 
-    // Listen for network connection status changes
-    InternetConnectionChecker().onStatusChange.listen((status) {
-      if (status == InternetConnectionStatus.disconnected && !isDialogOpen) {
-        // Show the dialog immediately when the network is disconnected
+    print('✅ NetworkConnection initialized');
+
+    // Start checking
+    _startMonitoring();
+  }
+
+  static Future<void> _startMonitoring() async {
+    try {
+      // Initial check
+      await _checkConnection();
+
+      // Listen for changes
+      InternetConnectionChecker().onStatusChange.listen((status) async {
+        await _checkConnection();
+      });
+    } catch (e) {
+      print('❌ Error in network monitoring: $e');
+    }
+  }
+
+  static Future<void> _checkConnection() async {
+    try {
+      bool isConnected = await InternetConnectionChecker().hasConnection;
+      print('🌐 Internet connection: $isConnected');
+
+      if (!isConnected && !isDialogOpen) {
         _showNoInternetDialog();
-      } else if (status == InternetConnectionStatus.connected && isDialogOpen) {
-        // Close the dialog immediately when the internet is restored
-        Get.back();
-        isDialogOpen = false;  // Reset the flag
+      } else if (isConnected && isDialogOpen) {
+        _hideDialog();
+      }
+    } catch (e) {
+      print('❌ Error checking connection: $e');
+    }
+  }
+
+  static void _showNoInternetDialog() {
+    if (isDialogOpen) return;
+
+    isDialogOpen = true;
+
+    // Delay to ensure context is ready
+    Future.delayed(Duration.zero, () {
+      try {
+        Get.dialog(
+          WillPopScope(
+            onWillPop: () async => false, // Prevent back button from closing
+            child: AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15.0),
+              ),
+              title: const Text(
+                'No Internet Connection',
+                style: TextStyle(
+                  fontSize: 18.0,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
+              ),
+              content: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.wifi_off, size: 50, color: Colors.red),
+                  SizedBox(height: 10),
+                  Text(
+                    'Please check your internet connection',
+                    style: TextStyle(fontSize: 16.0, color: Colors.black),
+                  ),
+                ],
+              ),
+              actions: [
+                Center(
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30.0),
+                      ),
+                    ),
+                    onPressed: () async {
+                      bool isConnected =
+                          await InternetConnectionChecker().hasConnection;
+                      if (isConnected) {
+                        _hideDialog();
+                      }
+                    },
+                    child: const Text(
+                      'Try Again',
+                      style: TextStyle(fontSize: 16.0, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          barrierDismissible: false,
+        );
+        print('✅ Dialog shown successfully');
+      } catch (e) {
+        print('❌ Error showing dialog: $e');
+        isDialogOpen = false;
       }
     });
   }
 
-  // Initial internet connection check to respond immediately when offline
-  static Future<void> _checkConnectionStatus() async {
-    bool isConnected = await InternetConnectionChecker().hasConnection;
-
-    if (!isConnected && !isDialogOpen) {
-      // Show the dialog if offline
-      _showNoInternetDialog();
-    } else if (isConnected && isDialogOpen) {
-      // Close the dialog if online
+  static void _hideDialog() {
+    if (isDialogOpen) {
       Get.back();
-      isDialogOpen = false;  // Reset the flag
+      isDialogOpen = false;
+      print('✅ Dialog hidden');
     }
   }
-
-  // Show the No Internet dialog
-  static void _showNoInternetDialog() {
-    isDialogOpen = true;
-    Get.dialog(
-      AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15.0), // Rounded corners
-        ),
-        title: Text(
-          'No Internet Connection Found!',
-          style: TextStyle(
-            fontSize: 18.0,
-            fontWeight: FontWeight.bold,
-            color: Colors.red,
-          ),
-        ),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 10),
-          child: Text(
-            'Please check your internet connection',
-            style: TextStyle(fontSize: 16.0, color: Colors.black),
-          ),
-        ),
-        actions: [
-          Center(  // Centering the button
-            child: TextButton(
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.red,  // Red background for button
-                padding: EdgeInsets.symmetric(horizontal: 40, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30.0),  // Rounded button
-                ),
-              ),
-              onPressed: () async {
-                // Show loading indicator while checking connection
-                EasyLoading.show(status: 'Checking...');
-                bool isConnected = await InternetConnectionChecker().hasConnection;
-                EasyLoading.dismiss(); // Hide loading indicator
-
-                if (isConnected) {
-                  // If internet is restored, close the dialog immediately
-                  Get.back(); // Close the dialog
-                  isDialogOpen = false;  // Reset the flag
-                } else {
-                  // If still offline, keep dialog open
-                  debugPrint("Still offline, keep dialog open.");
-                }
-              },
-              child: Text(
-                'Try Again',
-                style: TextStyle(
-                  fontSize: 16.0,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      barrierDismissible: false, // Prevent dismissing by tapping outside
-    );
-}
 }

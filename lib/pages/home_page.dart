@@ -24,7 +24,10 @@ import 'package:medbook/pages/Hospitals/HospitalPage1.dart';
 import 'package:medbook/pages/Doctors/Doctors_page1.dart';
 import 'package:medbook/pages/Traditional/Traditional1.dart';
 import 'package:medbook/pages/services/service_page0.dart';
+import 'package:medbook/utils/check_network.dart';
 import 'dart:io';
+
+import 'package:medbook/utils/network_connection.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -34,6 +37,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
+  late Timer _networkTimer;
   late AnimationController _swipeController;
   late Animation<double> _swipeAnimation;
 
@@ -313,6 +317,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         );
       }
     });
+    // ✅ CHANGE THIS TO NetworkCheck (NOT NetworkConnection)
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Check immediately when screen loads
+      await NetworkCheck.showDialogIfOffline();
+
+      // Keep checking every 3 seconds
+      _networkTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+        await NetworkCheck.showDialogIfOffline();
+      });
+    });
   }
 
   @override
@@ -320,7 +334,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     _scrollTimer.cancel();
     _doctorScrollController.dispose();
     _swipeController.dispose();
-    //swipe animation
+    _networkTimer.cancel(); // Cancel network timer
+    NetworkCheck.closeDialog(); // Close dialog if open
     super.dispose();
   }
 
@@ -711,8 +726,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                     MaterialPageRoute(
                                       builder: (context) => ServicePage0(
                                         serviceId: service['id'].toString(),
-                                        mainServiceName:
-                                            service['serviceName'],
+                                        mainServiceName: service['serviceName'],
                                       ),
                                     ),
                                   );

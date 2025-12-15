@@ -1,6 +1,6 @@
 // ignore_for_file: equal_keys_in_map
 import 'package:flutter/material.dart';
-import 'package:get/route_manager.dart';
+import 'package:get/get.dart';
 import 'package:medbook/components/Events/EventsPage2.dart';
 import 'package:medbook/utils/network_connection.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
@@ -19,6 +19,7 @@ import 'package:medbook/pages/Doctors/Doctors_Page1.dart';
 import 'package:medbook/pages/Traditional/Traditional1.dart';
 import 'package:medbook/services/secure_storage_service.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart'; // Add this import
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,7 +27,7 @@ void main() {
   // Keep splash until app finishes loading
   FlutterNativeSplash.preserve(widgetsBinding: WidgetsBinding.instance);
 
-  NetworkConnection.checkInternetConnection();
+  // Don't check here - move it to after app initialization
   runApp(const MyApp());
 }
 
@@ -53,6 +54,8 @@ class _MyAppState extends State<MyApp> {
   Future<void> _initApp() async {
     await _checkAuthStatus(); // Only check login
     FlutterNativeSplash.remove(); // Now remove splash
+    
+  
   }
 
   Future<bool> _checkAuthStatus() async {
@@ -68,11 +71,16 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return GetMaterialApp(
       title: 'MedBook',
       debugShowCheckedModeBanner: false,
-
       theme: ThemeData(scaffoldBackgroundColor: Colors.white),
+      
+      // Configure EasyLoading
+      builder: (context, child) {
+        child = EasyLoading.init()(context, child);
+        return child;
+      },
 
       // INITIAL SCREEN - no loading widget
       home: _isLoggedIn ? const HomePage() : const StartingPage(),
