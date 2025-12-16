@@ -249,7 +249,7 @@ class _ServicesPage3State extends State<ServicesPage3> {
   Widget build(BuildContext context) {
     final address =
         '${serviceDetails?['addressLine1'] ?? ''}, ${serviceDetails?['addressLine2'] ?? ''}';
-    final phoneNumber = serviceDetails?['phoneNumber']?.toString() ?? '';
+    final phoneNumber = serviceDetails?['phone']?.toString() ?? '';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -422,8 +422,14 @@ class _ServicesPage3State extends State<ServicesPage3> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (_) => ServiceSchedule(
-                                        serviceName: serviceDetails?['serviceName']?.toString() ?? '',
-                                        serviceId: serviceDetails?['_id']?.toString() ?? '',
+                                        serviceName:
+                                            serviceDetails?['serviceName']
+                                                ?.toString() ??
+                                            '',
+                                        serviceId:
+                                            serviceDetails?['_id']
+                                                ?.toString() ??
+                                            '',
                                         servicePhone: phoneNumber,
                                       ),
                                     ),
@@ -689,9 +695,7 @@ class _ServicesPage3State extends State<ServicesPage3> {
                           showVideoProgressIndicator: true,
                           progressIndicatorColor: Colors.redAccent,
                         ),
-                        builder: (context, player) => ClipRRect(
-                          child: player,
-                        ),
+                        builder: (context, player) => ClipRRect(child: player),
                       ),
                     ),
 
